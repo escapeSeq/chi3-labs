@@ -93,6 +93,7 @@ class BrainSlot:
     parent_id: str | None = None
     lineage: str = ""
     revision: int = 0
+    stored: bool = False
 
     def __post_init__(self) -> None:
         if not self.lineage:
@@ -106,6 +107,7 @@ class BrainSlot:
             "parent_id": self.parent_id,
             "lineage": self.lineage,
             "revision": self.revision,
+            "stored": self.stored,
         }
 
 
@@ -164,6 +166,7 @@ class Academy:
             parent_id,
             lineage or parent_id or brain_id,
             int(revision),
+            False,
         )
 
     def _ensure_seat_brains(self, n: int) -> None:
@@ -233,6 +236,18 @@ class Academy:
             self._ensure_seat_brains(n_planes)
             self.lineup = _normalize_lineup(payload.get("lineup"), n_planes, self.brains)
             self.n_planes = len(self.lineup)
+            assigned = {item["brain_id"] for item in self.lineup}
+            for meta in metas:
+                if not isinstance(meta, dict):
+                    continue
+                brain_id = _brain_id(meta.get("id"))
+                if not brain_id or brain_id not in self.brains:
+                    continue
+                if "stored" in meta:
+                    self.brains[brain_id].stored = bool(meta.get("stored"))
+                else:
+                    self.brains[brain_id].stored = brain_id not in assigned
+            self._prune_ephemeral()
             if academy_path.is_file():
                 self.score = Scoreboard.from_dict(payload.get("score") or {})
                 self.curve = list(payload.get("curve") or [])[-CURVE_KEEP:]
@@ -305,6 +320,7 @@ class Academy:
             self.lineup.append({"brain_id": slot.id})
         self.lineup = self.lineup[:n]
         self.n_planes = len(self.lineup)
+        self._prune_ephemeral()
         if persist:
             self.persist()
         return self.n_planes
@@ -315,7 +331,7 @@ class Academy:
             self.brains[bid] = self._make_brain(bid, f"P{seat + 1}", True)
             return self.brains[bid]
         used = {item["brain_id"] for item in self.lineup}
-        if bid not in used:
+        if bid not in used and not self.brains[bid].stored:
             return self.brains[bid]
         return self.add_brain(f"P{seat + 1}", learn=True, persist=False)
 
@@ -332,6 +348,7 @@ class Academy:
         if lineup is not None:
             self.lineup = self._apply_lineup(lineup)
             self.n_planes = len(self.lineup)
+            self._prune_ephemeral()
         if persist:
             self.persist()
 
@@ -391,9 +408,13 @@ class Academy:
         child.policy.copy_from(parent.policy)
         self.brains[brain_id] = child
         parent.learn = False
+        parent.stored = True
         if assign_seat is not None and 0 <= assign_seat < len(self.lineup):
             self.lineup[assign_seat]["brain_id"] = child.id
         if persist:
+            if child.id not in {item["brain_id"] for item in self.lineup}:
+                child.stored = True
+            self._prune_ephemeral()
             self.persist()
         return child
 
@@ -408,6 +429,7 @@ class Academy:
         for seat in assigned:
             replacement = self._fresh_seat_brain(seat)
             self.lineup[seat]["brain_id"] = replacement.id
+        self._prune_ephemeral()
         if persist:
             self.persist()
 
@@ -419,6 +441,27 @@ class Academy:
         self.empty = all(slot.policy.updates == 0 for slot in self.brains.values())
         if persist:
             self.persist()
+
+    def _assigned_ids(self) -> set[str]:
+        return {item["brain_id"] for item in self.lineup}
+
+    def _drop_brain(self, brain_id: str) -> None:
+        self.brains.pop(brain_id, None)
+        if self.data_dir is None:
+            return
+        path = self.data_dir / f"{brain_id}.npz"
+        if path.is_file():
+            path.unlink()
+
+    def _prune_ephemeral(self) -> None:
+        keep = self._assigned_ids()
+        drop = [bid for bid, slot in self.brains.items() if bid not in keep and not slot.stored]
+        for bid in drop:
+            if len(self.brains) <= 1:
+                break
+            if bid in keep:
+                continue
+            self._drop_brain(bid)
 
     def _next_brain_id(self, prefix: str = "b") -> str:
         prefix = re.sub(r"[^a-z0-9-]", "", prefix.lower()) or "b"
@@ -440,6 +483,7 @@ class Academy:
             info.update(slot.meta())
             info["planes"] = used.count(slot.id)
             info["assigned"] = slot.id in used
+            info["in_library"] = bool(slot.stored) and slot.id not in used
             info["parent_label"] = self.brains[slot.parent_id].label if slot.parent_id in self.brains else None
             wins = int(self.score.wins.get(slot.id, 0))
             kills = int(self.score.kills.get(slot.id, 0))

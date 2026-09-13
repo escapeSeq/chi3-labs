@@ -8,7 +8,7 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%230c1418' width='64' height='64'/%3E%3Cpath d='M12 40 L32 16 L52 40 L32 32 Z' fill='%23e85d4c'/%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=ffa-tables" />
+    <link rel="stylesheet" href="/static/styles.css?v=ffa-lib-swap" />
   </head>
   <body>
     <header class="mast">
@@ -107,14 +107,14 @@
       <article class="hangar">
         <header>
           <h2>Hangar</h2>
-          <p class="hint">Brains on the planes in this fight. Click a column header to sort. Revise a seat to freeze the current net in the library and fly a learning copy.</p>
+          <p class="hint">Brains on the planes in this fight. Click a column header to sort. Revise a seat to freeze that net in the library and fly a learning copy. Swapping a seat discards the old working copy — it does not archive it.</p>
         </header>
         <div class="table-scroll" id="hangar"></div>
       </article>
       <article class="library">
         <header>
           <h2>Brain library</h2>
-          <p class="hint">Stored revisions of hangar brains. Empty until you revise a seat. Assign one back to a plane from the hangar list.</p>
+          <p class="hint">Only revisions live here. Revise a hangar brain to store it. Swapping a plane to another net does not add the old one.</p>
         </header>
         <div class="table-scroll" id="roster"></div>
       </article>
@@ -181,7 +181,8 @@
         <p>
           Freeze a flying net with <em>revise</em>. The frozen parent lands in
           the library; the seat keeps a learning copy. Pick a library brain in
-          the hangar to fly an older revision again.
+          the hangar to fly an older revision again. Swapping a seat without
+          revising throws the old working copy away.
         </p>
       </article>
     </section>
@@ -194,6 +195,6 @@
         this academy on port 8082
       </p>
     </footer>
-    <script src="/static/app.js?v=ffa-tables" type="module"></script>
+    <script src="/static/app.js?v=ffa-lib-swap" type="module"></script>
   </body>
 </html>

@@ -108,7 +108,7 @@ def test_revision_copies_weights_and_freezes_parent():
     assert child.learn is True
     assert academy.lineup[0]["brain_id"] == child.id
     report = academy.roster_report()
-    stored = [row for row in report if not row["assigned"]]
+    stored = [row for row in report if row.get("in_library")]
     flying = [row for row in report if row["assigned"]]
     assert {row["id"] for row in stored} == {"p1"}
     assert child.id in {row["id"] for row in flying}

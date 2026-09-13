@@ -90,7 +90,7 @@ def _status() -> dict:
         "action_names": list(ACTION_NAMES),
         "brains": brains,
         "roster": roster,
-        "library": [row for row in roster if not row.get("assigned")],
+        "library": [row for row in roster if row.get("in_library")],
         "lineup": list(ACADEMY.lineup),
         "training": ACADEMY.training_report(),
         "physics": {

@@ -171,6 +171,44 @@ def test_library_starts_empty_and_stores_hangar_revisions():
     assert child["learn"] is True
     assert any(row["id"] == "p1" for row in revised["library"])
     assert child_id not in {row["id"] for row in revised["library"]}
+    assert parent["stored"] is True
+    assert child["stored"] is False
+
+
+def test_swap_does_not_put_old_brain_in_library():
+    empty = client.get("/api/state").json()
+    p1 = empty["lineup"][0]["brain_id"]
+    p2 = empty["lineup"][1]["brain_id"]
+    swapped = client.post(
+        "/api/roster",
+        json={
+            "brains": empty["roster"],
+            "lineup": [{"brain_id": p1, "learn": True}, {"brain_id": p1, "learn": True}],
+        },
+    ).json()
+    assert swapped["library"] == []
+    assert p2 not in swapped["brains"]
+    assert [slot["brain_id"] for slot in swapped["lineup"]] == [p1, p1]
+    grown = client.post("/api/planes", json={"n": 4}).json()
+    assert grown["library"] == []
+    shrunk = client.post("/api/planes", json={"n": 2}).json()
+    assert shrunk["library"] == []
+    assert shrunk["physics"]["n_planes"] == 2
+    revised = client.post("/api/brains/p1/revise", json={"seat": 0}).json()
+    child_id = revised["lineup"][0]["brain_id"]
+    restored = client.post(
+        "/api/roster",
+        json={
+            "brains": revised["roster"],
+            "lineup": [
+                {"brain_id": "p1", "learn": False},
+                {"brain_id": revised["lineup"][1]["brain_id"], "learn": True},
+            ],
+        },
+    ).json()
+    assert child_id not in restored["brains"]
+    assert "p1" not in {row["id"] for row in restored["library"]}
+    assert restored["lineup"][0]["brain_id"] == "p1"
 
 
 def test_roster_share_revise_and_delete():

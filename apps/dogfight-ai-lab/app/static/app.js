@@ -63,7 +63,7 @@ function rosterList() {
 }
 
 function libraryList() {
-  return rosterList().filter((brain) => !brain.assigned);
+  return rosterList().filter((brain) => brain.stored && !brain.assigned);
 }
 
 function sortValue(row, key) {
@@ -123,7 +123,7 @@ function brainOptions(select, selectedId) {
   rosterList().forEach((brain) => {
     const opt = document.createElement("option");
     opt.value = brain.id;
-    const place = brain.assigned ? "" : " · library";
+    const place = brain.stored && !brain.assigned ? " · library" : "";
     const rev = brain.revision ? ` r${brain.revision}` : "";
     const frozen = brain.learn === false ? " · frozen" : "";
     opt.textContent = `${brain.label}${rev}${frozen}${place}`;
