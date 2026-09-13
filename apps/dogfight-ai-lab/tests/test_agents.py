@@ -112,6 +112,15 @@ def test_revision_copies_weights_and_freezes_parent():
     flying = [row for row in report if row["assigned"]]
     assert {row["id"] for row in stored} == {"p1"}
     assert child.id in {row["id"] for row in flying}
+    academy.set_roster(
+        [slot.meta() for slot in academy.brains.values()],
+        [{"brain_id": "p1"}, {"brain_id": academy.lineup[1]["brain_id"]}],
+        persist=False,
+    )
+    assert "p1" in academy.brains
+    assert child.id not in academy.brains
+    assert academy.brains["p1"].stored is True
+    assert any(row["id"] == "p1" and row["in_library"] for row in academy.roster_report())
 
 
 def test_reset_stats_keeps_stored_brains(tmp_path):

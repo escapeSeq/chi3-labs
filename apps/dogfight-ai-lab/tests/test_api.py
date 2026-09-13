@@ -207,8 +207,10 @@ def test_swap_does_not_put_old_brain_in_library():
         },
     ).json()
     assert child_id not in restored["brains"]
-    assert "p1" not in {row["id"] for row in restored["library"]}
+    assert any(row["id"] == "p1" for row in restored["library"])
     assert restored["lineup"][0]["brain_id"] == "p1"
+    assert restored["brains"]["p1"]["stored"] is True
+    assert restored["brains"]["p1"]["assigned"] is True
 
 
 def test_roster_share_revise_and_delete():

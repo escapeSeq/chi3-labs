@@ -483,7 +483,7 @@ class Academy:
             info.update(slot.meta())
             info["planes"] = used.count(slot.id)
             info["assigned"] = slot.id in used
-            info["in_library"] = bool(slot.stored) and slot.id not in used
+            info["in_library"] = bool(slot.stored)
             info["parent_label"] = self.brains[slot.parent_id].label if slot.parent_id in self.brains else None
             wins = int(self.score.wins.get(slot.id, 0))
             kills = int(self.score.kills.get(slot.id, 0))

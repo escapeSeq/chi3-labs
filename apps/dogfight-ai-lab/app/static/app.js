@@ -63,7 +63,7 @@ function rosterList() {
 }
 
 function libraryList() {
-  return rosterList().filter((brain) => brain.stored && !brain.assigned);
+  return rosterList().filter((brain) => brain.stored);
 }
 
 function sortValue(row, key) {
@@ -123,7 +123,7 @@ function brainOptions(select, selectedId) {
   rosterList().forEach((brain) => {
     const opt = document.createElement("option");
     opt.value = brain.id;
-    const place = brain.stored && !brain.assigned ? " · library" : "";
+    const place = brain.stored ? " · library" : "";
     const rev = brain.revision ? ` r${brain.revision}` : "";
     const frozen = brain.learn === false ? " · frozen" : "";
     opt.textContent = `${brain.label}${rev}${frozen}${place}`;
@@ -443,7 +443,7 @@ function renderRoster() {
       box.type = "checkbox";
       box.checked = brain.learn;
       box.addEventListener("change", () => pushRoster());
-      learn.append(box, document.createTextNode(brain.learn ? "ready" : "frozen"));
+      learn.append(box, document.createTextNode(brain.assigned ? "flying" : brain.learn ? "ready" : "frozen"));
       status.append(learn);
       const actions = document.createElement("td");
       actions.className = "brain-actions";
