@@ -32,7 +32,7 @@ const field = $("field");
 const fctx = field.getContext("2d");
 
 const BURST_MIN = 100;
-const BURST_MAX = 1_000_000;
+const BURST_MAX = 10_000_000;
 const ACTION_NAMES = ["left", "straight", "right", "left+fire", "straight+fire", "right+fire"];
 const OBS_NAMES = ["fwd", "right", "range", "rel h", "x", "y", "cos", "sin", "wall", "gun"];
 const PLANES_MIN = 2;
@@ -154,7 +154,7 @@ function seatColor(i) {
 
 function burstSize() {
   const n = Number($("episodes-num").value);
-  if (!Number.isFinite(n)) return 100;
+  if (!Number.isFinite(n)) return 1_000_000;
   return Math.min(BURST_MAX, Math.max(BURST_MIN, Math.round(n)));
 }
 
@@ -185,7 +185,7 @@ $("episodes-num").addEventListener("change", () => setBurst(burstSize()));
 
 function timeoutSeconds() {
   const n = Number($("timeout-num").value);
-  if (!Number.isFinite(n)) return 12;
+  if (!Number.isFinite(n)) return 600;
   return Math.min(TIMEOUT_MAX, Math.max(TIMEOUT_MIN, Math.round(n)));
 }
 
@@ -636,20 +636,6 @@ $("lesson").addEventListener("click", async () => {
   }
 });
 
-$("reset-stats").addEventListener("click", async () => {
-  pauseFlights();
-  try {
-    const res = await fetch("/api/reset-stats", { method: "POST" });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.detail || "Reset failed");
-    applyStatus(body);
-    paintChart([]);
-    $("status").textContent = "Wins, kills, and the chart are cleared. Brains kept.";
-  } catch (err) {
-    $("status").textContent = err.message;
-  }
-});
-
 document.querySelectorAll("[data-brain-tab]").forEach((button) => {
   button.addEventListener("click", () => setBrainTab(button.dataset.brainTab));
 });
@@ -662,15 +648,6 @@ function setBrainTab(tab) {
     pane.classList.toggle("is-on", pane.dataset.pane === tab);
   });
 }
-
-$("forget").addEventListener("click", async () => {
-  pauseFlights();
-  const body = await (await fetch("/api/reset", { method: "POST" })).json();
-  applyStatus(body);
-  drawEmpty();
-  $("status").textContent = "All brains scrambled. Names, revisions, and hangar seats kept.";
-  resumeFlights();
-});
 
 function applyStatus(body) {
   const s = body.score || {};

@@ -35,13 +35,13 @@ app = FastAPI(
 
 
 class LessonIn(BaseModel):
-    episodes: int = Field(default=100, ge=4, le=1_000_000)
+    episodes: int = Field(default=1_000_000, ge=4, le=10_000_000)
     lr: float = Field(default=0.018, gt=0.001, le=0.08)
     seconds: float | None = Field(default=None, ge=10.0, le=600.0)
 
 
 class TimeoutIn(BaseModel):
-    seconds: float = Field(default=12.0, ge=10.0, le=600.0)
+    seconds: float = Field(default=600.0, ge=10.0, le=600.0)
 
 
 class PlanesIn(BaseModel):

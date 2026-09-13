@@ -21,7 +21,7 @@ def test_health_and_index():
     assert "Dogfight" in page.text
     assert "Hangar" in page.text
     assert "Brain library" in page.text
-    assert "Reset statistics" in page.text
+    assert "Train this burst" in page.text
     assert "Graph" in page.text
     assert 'id="winner-read"' in page.text
     assert "red-kills" not in page.text
@@ -32,7 +32,9 @@ def test_health_and_index():
     assert page.headers.get("cache-control") == "no-store"
     assert "Numbers" in page.text
     assert "/data" in page.text
-    assert "1000000" in page.text
+    assert "10000000" in page.text
+    assert "Reset statistics" not in page.text
+    assert "Wipe all brains" not in page.text
     assert "Sortie timeout" in page.text
     assert "Planes in the fight" in page.text
     assert "Last plane standing" in page.text
@@ -62,9 +64,9 @@ def test_watch_and_reset():
     assert reset["score"]["red_kills"] == 0
 
 
-def test_burst_default_is_one_hundred():
-    assert LessonIn().episodes == 100
-    assert LessonIn(episodes=1_000_000).episodes == 1_000_000
+def test_burst_default_is_one_million():
+    assert LessonIn().episodes == 1_000_000
+    assert LessonIn(episodes=10_000_000).episodes == 10_000_000
 
 
 def test_state_reports_stored_brains():
@@ -121,8 +123,8 @@ def test_reset_stats_clears_score_keeps_brains():
 
 def test_timeout_updates_and_survives_wipe():
     empty = client.get("/api/state").json()
-    assert empty["physics"]["timeout"] == 12.0
-    assert empty["physics"]["max_steps"] == 240
+    assert empty["physics"]["timeout"] == 600.0
+    assert empty["physics"]["max_steps"] == 12000
     body = client.post("/api/timeout", json={"seconds": 45}).json()
     assert body["physics"]["timeout"] == 45.0
     assert body["physics"]["max_steps"] == 900
