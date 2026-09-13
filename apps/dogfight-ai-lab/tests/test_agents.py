@@ -106,11 +106,23 @@ def test_revision_copies_weights_and_freezes_parent():
     academy = Academy(np.random.default_rng(6))
     academy.play(learn=True, persist=False)
     parent = academy.red.W2.copy()
+    academy.score.wins["p1"] = 4
+    academy.score.kills["p1"] = 7
+    academy.score.walls["p1"] = 2
     child = academy.revise_brain("p1", assign_seat=0)
     assert np.allclose(child.policy.W2, parent)
     assert academy.brains["p1"].learn is False
     assert child.learn is True
     assert academy.lineup[0]["brain_id"] == child.id
+    assert academy.score.wins[child.id] == 4
+    assert academy.score.kills[child.id] == 7
+    assert academy.score.walls[child.id] == 2
+    assert academy.score.wins["p1"] == 4
+    academy.score.note(["x_kill", "win_x"], {"x": child.id})
+    assert academy.score.kills[child.id] == 8
+    assert academy.score.wins[child.id] == 5
+    assert academy.score.kills["p1"] == 7
+    assert academy.score.wins["p1"] == 4
     report = academy.roster_report()
     stored = [row for row in report if row.get("in_library")]
     flying = [row for row in report if row["assigned"]]
@@ -128,6 +140,8 @@ def test_revision_copies_weights_and_freezes_parent():
     assert academy.brains["p1"].learn is False
     assert np.allclose(academy.brains["p1"].policy.W2, parent)
     assert academy.brains[flyer_id].parent_id == "p1"
+    assert academy.score.wins[flyer_id] == 4
+    assert academy.score.kills[flyer_id] == 7
     academy.play(learn=True, persist=False)
     assert np.allclose(academy.brains["p1"].policy.W2, parent)
     assert academy.brains[flyer_id].policy.updates >= 1

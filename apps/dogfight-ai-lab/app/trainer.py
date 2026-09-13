@@ -83,6 +83,15 @@ class Scoreboard:
         if "draw" in events and not any(e.startswith("win_") for e in events):
             self.draws += 1
 
+    def copy_brain_stats(self, src: str, dst: str) -> None:
+        if not src or not dst or src == dst:
+            return
+        self.kills[dst] = int(self.kills.get(src, 0))
+        self.walls[dst] = int(self.walls.get(src, 0))
+        self.wins[dst] = int(self.wins.get(src, 0))
+        if self.last_winner == src:
+            self.last_winner = dst
+
 
 @dataclass
 class BrainSlot:
@@ -428,6 +437,7 @@ class Academy:
         child = self._make_brain(brain_id, label, True, parent.id, lineage, revision)
         child.policy.copy_from(parent.policy)
         self.brains[brain_id] = child
+        self.score.copy_brain_stats(parent.id, child.id)
         parent.learn = False
         parent.stored = True
         if assign_seat is not None and 0 <= assign_seat < len(self.lineup):
@@ -482,6 +492,7 @@ class Academy:
         child.policy.copy_from(source.policy)
         child.stored = False
         self.brains[child.id] = child
+        self.score.copy_brain_stats(source.id, child.id)
         return child
 
     def _flyable_id(self, brain_id: str, learn: bool = True) -> str:
