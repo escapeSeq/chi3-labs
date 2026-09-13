@@ -1,4 +1,8 @@
 const $ = (id) => document.getElementById(id);
+function text(id, value) {
+  const el = $(id);
+  if (el) el.textContent = value;
+}
 const PALETTE = ["#e85d4c", "#3db8c5", "#e6c36a", "#7c6bff", "#5dce8a", "#e07ab5", "#f08a4b", "#8aa09a", "#6ec6ff"];
 const state = {
   timer: null,
@@ -108,7 +112,7 @@ function setTimeoutSeconds(seconds) {
   $("timeout").value = String(v);
   $("timeout-num").value = String(v);
   const steps = Math.round(v / (state.physics.dt || TIMEOUT_DT));
-  $("timeout-read").textContent = `${v} s · ${steps} steps`;
+  text("timeout-read", `${v} s · ${steps} steps`);
 }
 
 async function pushTimeout() {
@@ -152,9 +156,9 @@ function setPlaneCount(n) {
   const v = Math.min(PLANES_MAX, Math.max(PLANES_MIN, Math.round(Number(n) || PLANES_MIN)));
   $("planes").value = String(v);
   $("planes-num").value = String(v);
-  $("planes-read").textContent = `${v} planes · each seat has its own brain unless you share one`;
-  $("matchup-read").textContent = `${v} planes · FFA`;
-  $("field-hint").textContent = `Free-for-all, ${v} aircraft. Last plane left wins. Out of bounds is a crash.`;
+  text("planes-read", `${v} planes · each seat has its own brain unless you share one`);
+  text("matchup-read", `${v} planes · FFA`);
+  text("field-hint", `Free-for-all, ${v} aircraft. Last plane left wins. Out of bounds is a crash.`);
 }
 
 async function pushPlanes() {
@@ -482,12 +486,12 @@ function applyStatus(body) {
   if (body.lineup) state.lineup = body.lineup;
   if (body.brains) state.brains = brains;
   if (body.action_names) ACTION_NAMES.splice(0, ACTION_NAMES.length, ...body.action_names);
-  $("episode-read").textContent = String(s.episodes ?? 0);
-  $("winner-read").textContent = s.last_winner ? brainLabel(s.last_winner) : "—";
-  $("draw-read").textContent = `${s.draws ?? 0} · ${s.midairs ?? 0}`;
+  text("episode-read", String(s.episodes ?? 0));
+  text("winner-read", s.last_winner ? brainLabel(s.last_winner) : "—");
+  text("draw-read", `${s.draws ?? 0} · ${s.midairs ?? 0}`);
   const learners = rosterList().filter((b) => b.learn !== false);
-  $("empty-badge").textContent = body.empty ? "brains empty" : learners.length ? "learning in progress" : "brains frozen";
-  $("empty-badge").classList.toggle("is-trained", !body.empty);
+  text("empty-badge", body.empty ? "brains empty" : learners.length ? "learning in progress" : "brains frozen");
+  $("empty-badge")?.classList.toggle("is-trained", !body.empty);
   renderWinStrip(s);
   if (body.physics) {
     state.physics = body.physics;
@@ -507,13 +511,14 @@ function applyStatus(body) {
     state.curve = body.curve;
     paintChart(body.curve);
     if (!body.curve.length) {
-      $("lesson-note").textContent = "Survive. Point the nose. A crash is usually the wall.";
+      text("lesson-note", "Survive. Point the nose. A crash is usually the wall.");
     }
   }
 }
 
 function renderWinStrip(score) {
   const host = $("win-strip");
+  if (!host) return;
   host.replaceChildren();
   const wins = score.wins || {};
   const kills = score.kills || {};
@@ -530,22 +535,18 @@ function fillInspect() {
   const brain = brainById(state.inspectId);
   if (!brain) return;
   const last = state.training?.last_actions?.brains?.[brain.id];
-  $("inspect-title").textContent = brain.revision
-    ? `${brain.label} · r${brain.revision}`
-    : `${brain.label || "Brain"}`;
+  text("inspect-title", brain.revision ? `${brain.label} · r${brain.revision}` : `${brain.label || "Brain"}`);
   const shape = brain.shape || {};
-  $("inspect-arch").textContent = `${shape.obs ?? 10} obs → ${shape.hidden ?? 24} hidden ReLU → ${shape.actions ?? 6} actions`;
-  $("insp-upd").textContent = String(brain.updates ?? 0);
-  $("insp-l2").textContent = `${num(brain.weights?.l2, 2)} / ${brain.weights?.count ?? "—"}`;
-  $("insp-rms").textContent = `${num(brain.weights?.w1_rms)} (${num(brain.weights?.w1_growth)}×) · ${num(brain.weights?.w2_rms)} (${num(brain.weights?.w2_growth)}×)`;
-  $("insp-base").textContent = num(brain.baseline);
-  $("insp-ent").textContent = `${num(brain.probe?.entropy)} / ${pct(brain.probe?.max_prob)}`;
-  $("insp-hid").textContent = `${pct(brain.probe?.hidden_active)} on · ${brain.probe?.hidden_dead ?? 0} dead`;
-  $("insp-fav").textContent = brain.favorite || "—";
-  $("insp-rev").textContent = brain.revision
-    ? `r${brain.revision} from ${brain.parent_label || brain.parent_id}`
-    : "original";
-  $("inspect-last").textContent = `Last sortie mix: ${actionMix(last)}`;
+  text("inspect-arch", `${shape.obs ?? 10} obs → ${shape.hidden ?? 24} hidden ReLU → ${shape.actions ?? 6} actions`);
+  text("insp-upd", String(brain.updates ?? 0));
+  text("insp-l2", `${num(brain.weights?.l2, 2)} / ${brain.weights?.count ?? "—"}`);
+  text("insp-rms", `${num(brain.weights?.w1_rms)} (${num(brain.weights?.w1_growth)}×) · ${num(brain.weights?.w2_rms)} (${num(brain.weights?.w2_growth)}×)`);
+  text("insp-base", num(brain.baseline));
+  text("insp-ent", `${num(brain.probe?.entropy)} / ${pct(brain.probe?.max_prob)}`);
+  text("insp-hid", `${pct(brain.probe?.hidden_active)} on · ${brain.probe?.hidden_dead ?? 0} dead`);
+  text("insp-fav", brain.favorite || "—");
+  text("insp-rev", brain.revision ? `r${brain.revision} from ${brain.parent_label || brain.parent_id}` : "original");
+  text("inspect-last", `Last sortie mix: ${actionMix(last)}`);
   paintActions("inspect-acts", brain.probe?.mean_probs || [], "amber");
   paintBrainNet("inspect-net", brain, "amber");
   paintWeights("inspect-w1", brain.w1, "amber");

@@ -23,6 +23,13 @@ def test_health_and_index():
     assert "Brain library" in page.text
     assert "Reset statistics" in page.text
     assert "Graph" in page.text
+    assert 'id="winner-read"' in page.text
+    assert "red-kills" not in page.text
+    js = client.get("/static/app.js")
+    assert js.status_code == 200
+    assert "red-kills" not in js.text
+    assert "winner-read" in js.text
+    assert page.headers.get("cache-control") == "no-store"
     assert "Numbers" in page.text
     assert "/data" in page.text
     assert "1000000" in page.text
