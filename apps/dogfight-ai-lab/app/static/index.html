@@ -8,7 +8,7 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%230c1418' width='64' height='64'/%3E%3Cpath d='M12 40 L32 16 L52 40 L32 32 Z' fill='%23e85d4c'/%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=ffa-timeout" />
+    <link rel="stylesheet" href="/static/styles.css?v=ffa-tables" />
   </head>
   <body>
     <header class="mast">
@@ -23,9 +23,9 @@
         Each plane is a Dubins vehicle: yaw is capped by speed ÷ turn radius,
         and the gun is welded to the nose. Everyone shoots everyone. A sortie
         ends when one aircraft remains, or the clock runs out. Each seat starts
-        with its own brain. Share a brain only if you choose to. If one copy
-        learns and another stays frozen, the learner is a <em>revision</em> of
-        the original. Weights live on <code>/data</code>.
+        with its own brain. Share a brain only if you choose to. Revise a seat
+        to store the current net in the library and keep learning on a copy.
+        Weights live on <code>/data</code>.
       </p>
     </header>
 
@@ -107,19 +107,16 @@
       <article class="hangar">
         <header>
           <h2>Hangar</h2>
-          <p class="hint">Each plane needs a brain. Pick the same net to share, or fork a revision if only one seat should learn.</p>
+          <p class="hint">Brains on the planes in this fight. Click a column header to sort. Revise a seat to freeze the current net in the library and fly a learning copy.</p>
         </header>
-        <div id="hangar"></div>
+        <div class="table-scroll" id="hangar"></div>
       </article>
       <article class="library">
-        <header class="lib-head">
-          <div>
-            <h2>Brain library</h2>
-            <p class="hint">Create, revise, rename, freeze, or delete. A revision copies weights from the parent and starts learning.</p>
-          </div>
-          <button id="add-brain" type="button">New brain</button>
+        <header>
+          <h2>Brain library</h2>
+          <p class="hint">Stored revisions of hangar brains. Empty until you revise a seat. Assign one back to a plane from the hangar list.</p>
         </header>
-        <div id="roster"></div>
+        <div class="table-scroll" id="roster"></div>
       </article>
     </section>
 
@@ -182,9 +179,9 @@
       <article>
         <h2>Revisions</h2>
         <p>
-          Freeze a net that already flies, then revise it. The child starts
-          from those weights and keeps learning; the parent stays put. Share a
-          brain across seats only when you want identical tactics.
+          Freeze a flying net with <em>revise</em>. The frozen parent lands in
+          the library; the seat keeps a learning copy. Pick a library brain in
+          the hangar to fly an older revision again.
         </p>
       </article>
     </section>
@@ -197,6 +194,6 @@
         this academy on port 8082
       </p>
     </footer>
-    <script src="/static/app.js?v=ffa-timeout" type="module"></script>
+    <script src="/static/app.js?v=ffa-tables" type="module"></script>
   </body>
 </html>

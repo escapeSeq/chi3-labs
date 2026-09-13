@@ -433,6 +433,7 @@ class Academy:
 
     def roster_report(self) -> list[dict]:
         used = [item["brain_id"] for item in self.lineup]
+        episodes = self.score.episodes
         rows = []
         for slot in self.brains.values():
             info = slot.policy.inspect()
@@ -440,6 +441,15 @@ class Academy:
             info["planes"] = used.count(slot.id)
             info["assigned"] = slot.id in used
             info["parent_label"] = self.brains[slot.parent_id].label if slot.parent_id in self.brains else None
+            wins = int(self.score.wins.get(slot.id, 0))
+            kills = int(self.score.kills.get(slot.id, 0))
+            walls = int(self.score.walls.get(slot.id, 0))
+            info["wins"] = wins
+            info["kills"] = kills
+            info["walls"] = walls
+            info["win_rate"] = (wins / episodes) if episodes else 0.0
+            info["kill_rate"] = (kills / episodes) if episodes else 0.0
+            info["wall_rate"] = (walls / episodes) if episodes else 0.0
             rows.append(info)
         rows.sort(key=lambda row: (row.get("lineage") or row["id"], row.get("revision") or 0, row["id"]))
         return rows

@@ -181,7 +181,7 @@ main {
 
 .admin {
   display: grid;
-  grid-template-columns: 1.1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 1rem;
   margin-top: 1rem;
 }
@@ -243,38 +243,105 @@ input[type="number"]::-webkit-outer-spin-button {
   margin: 0;
 }
 
+.table-scroll {
+  overflow-x: auto;
+}
+
 #hangar,
 #roster {
-  display: grid;
-  gap: 0.4rem;
+  display: block;
+}
+
+.stat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.72rem;
+}
+
+.stat-table th,
+.stat-table td {
+  padding: 0.36rem 0.42rem;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.stat-table th {
+  color: var(--mute);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.62rem;
+  text-align: left;
+}
+
+.stat-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.stat-table th.sortable:hover {
+  color: var(--ink);
+}
+
+.stat-table th.is-asc::after,
+.stat-table th.is-desc::after {
+  color: var(--amber);
+  font-size: 0.58rem;
+}
+
+.stat-table th.is-asc::after {
+  content: " ▲";
+}
+
+.stat-table th.is-desc::after {
+  content: " ▼";
+}
+
+.stat-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-table th.num {
+  text-align: right;
+}
+
+.stat-table tbody tr:hover {
+  background: rgba(231, 239, 230, 0.04);
+}
+
+.stat-table td.brain-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  min-width: 8.5rem;
+}
+
+.stat-table select,
+.stat-table input[type="text"] {
+  width: 100%;
+  min-width: 7rem;
+}
+
+.stat-table .empty-lib {
+  color: var(--mute);
+  padding: 0.85rem 0.42rem;
+  white-space: normal;
 }
 
 .seat-row,
 .brain-row {
-  display: grid;
-  gap: 0.35rem;
-  align-items: center;
-  border: 1px solid var(--line);
-  background: #0f1a1e;
-  padding: 0.45rem 0.5rem;
-}
-
-.seat-row {
-  grid-template-columns: 2.4rem 1fr auto auto;
-}
-
-.brain-row {
-  grid-template-columns: 1fr auto;
-}
-
-.brain-main {
-  display: grid;
-  gap: 0.28rem;
+  display: table-row;
+  border: 0;
+  background: transparent;
+  padding: 0;
 }
 
 .brain-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.25rem;
   justify-content: end;
 }
@@ -508,12 +575,7 @@ footer a {
     grid-template-columns: 1fr;
   }
 
-  .seat-row {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .intel-head,
-  .lib-head {
+  .intel-head {
     flex-direction: column;
     align-items: stretch;
   }

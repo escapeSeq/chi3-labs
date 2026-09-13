@@ -22,6 +22,10 @@ const state = {
   brains: {},
   training: {},
   inspectId: null,
+  sort: {
+    hangar: { key: "plane", dir: "asc" },
+    library: { key: "revision", dir: "desc" },
+  },
 };
 
 const field = $("field");
@@ -56,6 +60,76 @@ function actionMix(counts) {
 
 function rosterList() {
   return state.roster?.length ? state.roster : Object.values(state.brains || {});
+}
+
+function libraryList() {
+  return rosterList().filter((brain) => !brain.assigned);
+}
+
+function sortValue(row, key) {
+  const value = row[key];
+  if (value == null || value === "") return key === "name" || key === "plane" || key === "from" || key === "favorite" ? "" : -Infinity;
+  if (typeof value === "boolean") return value ? 1 : 0;
+  return value;
+}
+
+function compareRows(a, b, key, dir) {
+  const av = sortValue(a, key);
+  const bv = sortValue(b, key);
+  let cmp = 0;
+  if (typeof av === "number" && typeof bv === "number") cmp = av - bv;
+  else cmp = String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: "base" });
+  return dir === "desc" ? -cmp : cmp;
+}
+
+function sortedCopy(rows, which) {
+  const { key, dir } = state.sort[which];
+  return [...rows].sort((a, b) => compareRows(a, b, key, dir));
+}
+
+function sortableHead(label, key, which, numeric) {
+  const el = document.createElement("th");
+  const cur = state.sort[which];
+  el.scope = "col";
+  if (numeric) el.classList.add("num");
+  el.classList.add("sortable");
+  if (cur.key === key) el.classList.add(cur.dir === "desc" ? "is-desc" : "is-asc");
+  el.textContent = label;
+  el.addEventListener("click", () => {
+    if (state.sort[which].key === key) {
+      state.sort[which].dir = state.sort[which].dir === "asc" ? "desc" : "asc";
+    } else {
+      state.sort[which] = { key, dir: numeric ? "desc" : "asc" };
+    }
+    if (which === "hangar") renderHangar();
+    else renderRoster();
+  });
+  return el;
+}
+
+function td(value, className) {
+  const cell = document.createElement("td");
+  if (className) cell.className = className;
+  cell.textContent = value == null || value === "" ? "—" : String(value);
+  return cell;
+}
+
+function ratePct(value) {
+  if (value == null || Number.isNaN(Number(value))) return "—";
+  return `${(Number(value) * 100).toFixed(0)}%`;
+}
+
+function brainOptions(select, selectedId) {
+  rosterList().forEach((brain) => {
+    const opt = document.createElement("option");
+    opt.value = brain.id;
+    const place = brain.assigned ? "" : " · library";
+    const rev = brain.revision ? ` r${brain.revision}` : "";
+    const frozen = brain.learn === false ? " · frozen" : "";
+    opt.textContent = `${brain.label}${rev}${frozen}${place}`;
+    select.append(opt);
+  });
+  select.value = selectedId;
 }
 
 function brainById(id) {
@@ -194,110 +268,222 @@ $("planes-num").addEventListener("change", () => {
 
 function renderHangar() {
   const host = $("hangar");
+  if (!host) return;
   const lineup = state.lineup || [];
-  const brains = rosterList();
-  host.replaceChildren();
-  lineup.forEach((slot, i) => {
-    const row = document.createElement("div");
-    row.className = "seat-row";
+  const rows = lineup.map((slot, i) => {
+    const brain = brainById(slot.brain_id) || {};
+    return {
+      plane: i + 1,
+      seat: i,
+      brain_id: slot.brain_id,
+      name: brain.label || slot.brain_id,
+      revision: brain.revision || 0,
+      learn: brain.learn !== false,
+      wins: brain.wins ?? 0,
+      kills: brain.kills ?? 0,
+      walls: brain.walls ?? 0,
+      updates: brain.updates ?? 0,
+      win_rate: brain.win_rate ?? 0,
+      favorite: brain.favorite || "—",
+      brain,
+    };
+  });
+  const table = document.createElement("table");
+  table.className = "stat-table";
+  const thead = document.createElement("thead");
+  const head = document.createElement("tr");
+  head.append(
+    sortableHead("Plane", "plane", "hangar"),
+    sortableHead("Brain", "name", "hangar"),
+    sortableHead("Rev", "revision", "hangar", true),
+    sortableHead("Learn", "learn", "hangar"),
+    sortableHead("Wins", "wins", "hangar", true),
+    sortableHead("Kills", "kills", "hangar", true),
+    sortableHead("Walls", "walls", "hangar", true),
+    sortableHead("Updates", "updates", "hangar", true),
+    sortableHead("Win%", "win_rate", "hangar", true),
+    sortableHead("Fav", "favorite", "hangar"),
+    document.createElement("th")
+  );
+  thead.append(head);
+  const tbody = document.createElement("tbody");
+  sortedCopy(rows, "hangar").forEach((row) => {
+    const tr = document.createElement("tr");
+    tr.className = "seat-row";
+    tr.dataset.seat = String(row.seat);
+    tr.dataset.brainId = row.brain_id;
+    const plane = document.createElement("td");
     const seat = document.createElement("span");
     seat.className = "seat";
     const swatch = document.createElement("i");
     swatch.className = "swatch";
-    swatch.style.background = seatColor(i);
-    seat.append(swatch, document.createTextNode(`P${i + 1}`));
-    const select = document.createElement("select");
-    brains.forEach((brain) => {
-      const opt = document.createElement("option");
-      opt.value = brain.id;
-      const rev = brain.revision ? ` r${brain.revision}` : "";
-      const frozen = brain.learn === false ? " · frozen" : "";
-      opt.textContent = `${brain.label}${rev}${frozen}`;
-      select.append(opt);
-    });
-    select.value = slot.brain_id;
-    select.addEventListener("change", () => pushRoster());
-    const learn = document.createElement("label");
-    learn.className = "learn-toggle";
-    const box = document.createElement("input");
-    box.type = "checkbox";
-    const assigned = brainById(slot.brain_id);
-    box.checked = assigned?.learn !== false;
-    box.addEventListener("change", () => pushRoster());
-    learn.append(box, document.createTextNode("learn"));
-    const fork = document.createElement("button");
-    fork.type = "button";
-    fork.className = "icon-btn";
-    fork.textContent = "revise";
-    fork.title = "Copy this brain into a learning revision for this seat";
-    fork.addEventListener("click", () => reviseBrain(slot.brain_id, i));
-    row.append(seat, select, learn, fork);
-    host.append(row);
-  });
-}
-
-function renderRoster() {
-  const host = $("roster");
-  host.replaceChildren();
-  rosterList().forEach((brain) => {
-    const row = document.createElement("div");
-    row.className = "brain-row";
-    const main = document.createElement("div");
-    main.className = "brain-main";
+    swatch.style.background = seatColor(row.seat);
+    seat.append(swatch, document.createTextNode(`P${row.plane}`));
+    plane.append(seat);
+    const nameCell = document.createElement("td");
     const name = document.createElement("input");
     name.type = "text";
     name.maxLength = 32;
-    name.value = brain.label || brain.id;
+    name.value = row.name;
     name.addEventListener("input", () => {
       state.rosterDirty = true;
     });
     name.addEventListener("change", () => pushRoster());
-    const meta = document.createElement("p");
-    meta.className = "meta";
-    const parent = brain.parent_label || brain.parent_id;
-    const rev = brain.revision ? `revision ${brain.revision}` : "original";
-    const from = parent ? ` · from ${parent}` : "";
-    const seats = brain.planes ? `${brain.planes} seat${brain.planes === 1 ? "" : "s"}` : "unused";
-    meta.textContent = `${rev}${from} · ${seats} · ${brain.updates ?? 0} updates`;
+    const select = document.createElement("select");
+    brainOptions(select, row.brain_id);
+    select.addEventListener("change", () => pushRoster());
+    nameCell.className = "brain-pick";
+    nameCell.append(name, select);
+    const learnCell = document.createElement("td");
     const learn = document.createElement("label");
     learn.className = "learn-toggle";
     const box = document.createElement("input");
     box.type = "checkbox";
-    box.checked = brain.learn !== false;
+    box.checked = row.learn;
     box.addEventListener("change", () => pushRoster());
-    learn.append(box, document.createTextNode(brain.learn === false ? "frozen" : "learning"));
-    main.append(name, meta, learn);
-    const actions = document.createElement("div");
+    learn.append(box);
+    learnCell.append(learn);
+    const actions = document.createElement("td");
     actions.className = "brain-actions";
     const inspect = document.createElement("button");
     inspect.type = "button";
     inspect.className = "icon-btn";
     inspect.textContent = "inspect";
     inspect.addEventListener("click", () => {
-      state.inspectId = brain.id;
+      state.inspectId = row.brain_id;
       fillInspect();
       renderChips();
     });
-    const revise = document.createElement("button");
-    revise.type = "button";
-    revise.className = "icon-btn";
-    revise.textContent = "revise";
-    revise.addEventListener("click", () => reviseBrain(brain.id));
-    const wipe = document.createElement("button");
-    wipe.type = "button";
-    wipe.className = "icon-btn";
-    wipe.textContent = "wipe";
-    wipe.addEventListener("click", () => wipeBrain(brain.id));
-    const drop = document.createElement("button");
-    drop.type = "button";
-    drop.className = "icon-btn";
-    drop.textContent = "delete";
-    drop.addEventListener("click", () => dropBrain(brain.id));
-    actions.append(inspect, revise, wipe, drop);
-    row.append(main, actions);
-    row.dataset.brainId = brain.id;
-    host.append(row);
+    const fork = document.createElement("button");
+    fork.type = "button";
+    fork.className = "icon-btn";
+    fork.textContent = "revise";
+    fork.title = "Freeze this net in the library and fly a learning copy";
+    fork.addEventListener("click", () => reviseBrain(row.brain_id, row.seat));
+    actions.append(inspect, fork);
+    tr.append(
+      plane,
+      nameCell,
+      td(row.revision || "—", "num"),
+      learnCell,
+      td(row.wins, "num"),
+      td(row.kills, "num"),
+      td(row.walls, "num"),
+      td(row.updates, "num"),
+      td(ratePct(row.win_rate), "num"),
+      td(row.favorite),
+      actions
+    );
+    tbody.append(tr);
   });
+  table.append(thead, tbody);
+  host.replaceChildren(table);
+}
+
+function renderRoster() {
+  const host = $("roster");
+  if (!host) return;
+  const stored = libraryList().map((brain) => ({
+    ...brain,
+    name: brain.label || brain.id,
+    from: brain.parent_label || brain.parent_id || "",
+    revision: brain.revision || 0,
+    learn: brain.learn !== false,
+    wins: brain.wins ?? 0,
+    kills: brain.kills ?? 0,
+    walls: brain.walls ?? 0,
+    updates: brain.updates ?? 0,
+    win_rate: brain.win_rate ?? 0,
+  }));
+  const table = document.createElement("table");
+  table.className = "stat-table";
+  const thead = document.createElement("thead");
+  const head = document.createElement("tr");
+  head.append(
+    sortableHead("Brain", "name", "library"),
+    sortableHead("From", "from", "library"),
+    sortableHead("Rev", "revision", "library", true),
+    sortableHead("Wins", "wins", "library", true),
+    sortableHead("Kills", "kills", "library", true),
+    sortableHead("Walls", "walls", "library", true),
+    sortableHead("Updates", "updates", "library", true),
+    sortableHead("Win%", "win_rate", "library", true),
+    sortableHead("Status", "learn", "library"),
+    document.createElement("th")
+  );
+  thead.append(head);
+  const tbody = document.createElement("tbody");
+  if (!stored.length) {
+    const tr = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 10;
+    cell.className = "empty-lib";
+    cell.textContent = "No stored revisions yet. Revise a hangar brain to freeze it here and fly a learning copy.";
+    tr.append(cell);
+    tbody.append(tr);
+  } else {
+    sortedCopy(stored, "library").forEach((brain) => {
+      const tr = document.createElement("tr");
+      tr.className = "brain-row";
+      tr.dataset.brainId = brain.id;
+      const nameCell = document.createElement("td");
+      const name = document.createElement("input");
+      name.type = "text";
+      name.maxLength = 32;
+      name.value = brain.name;
+      name.addEventListener("input", () => {
+        state.rosterDirty = true;
+      });
+      name.addEventListener("change", () => pushRoster());
+      nameCell.append(name);
+      const status = document.createElement("td");
+      const learn = document.createElement("label");
+      learn.className = "learn-toggle";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = brain.learn;
+      box.addEventListener("change", () => pushRoster());
+      learn.append(box, document.createTextNode(brain.learn ? "ready" : "frozen"));
+      status.append(learn);
+      const actions = document.createElement("td");
+      actions.className = "brain-actions";
+      const inspect = document.createElement("button");
+      inspect.type = "button";
+      inspect.className = "icon-btn";
+      inspect.textContent = "inspect";
+      inspect.addEventListener("click", () => {
+        state.inspectId = brain.id;
+        fillInspect();
+        renderChips();
+      });
+      const wipe = document.createElement("button");
+      wipe.type = "button";
+      wipe.className = "icon-btn";
+      wipe.textContent = "wipe";
+      wipe.addEventListener("click", () => wipeBrain(brain.id));
+      const drop = document.createElement("button");
+      drop.type = "button";
+      drop.className = "icon-btn";
+      drop.textContent = "delete";
+      drop.addEventListener("click", () => dropBrain(brain.id));
+      actions.append(inspect, wipe, drop);
+      tr.append(
+        nameCell,
+        td(brain.from),
+        td(brain.revision || "—", "num"),
+        td(brain.wins, "num"),
+        td(brain.kills, "num"),
+        td(brain.walls, "num"),
+        td(brain.updates, "num"),
+        td(ratePct(brain.win_rate), "num"),
+        status,
+        actions
+      );
+      tbody.append(tr);
+    });
+  }
+  table.append(thead, tbody);
+  host.replaceChildren(table);
 }
 
 function renderChips() {
@@ -318,16 +504,28 @@ function renderChips() {
 }
 
 function readRosterForm() {
-  const brains = [...$("roster").querySelectorAll(".brain-row")].map((row) => ({
-    id: row.dataset.brainId,
-    label: row.querySelector("input[type=text]").value,
-    learn: row.querySelector("input[type=checkbox]").checked,
-  }));
-  const lineup = [...$("hangar").querySelectorAll(".seat-row")].map((row) => ({
-    brain_id: row.querySelector("select").value,
-    learn: row.querySelector("input[type=checkbox]").checked,
-  }));
-  return { brains, lineup };
+  const byId = {};
+  [...$("roster").querySelectorAll(".brain-row")].forEach((row) => {
+    const id = row.dataset.brainId;
+    if (!id) return;
+    byId[id] = {
+      id,
+      label: row.querySelector("input[type=text]")?.value || id,
+      learn: row.querySelector("input[type=checkbox]")?.checked !== false,
+    };
+  });
+  const lineup = [...$("hangar").querySelectorAll(".seat-row")]
+    .sort((a, b) => Number(a.dataset.seat) - Number(b.dataset.seat))
+    .map((row) => {
+      const brain_id = row.querySelector("select")?.value;
+      const learn = row.querySelector("input[type=checkbox]")?.checked !== false;
+      const label = row.querySelector("input[type=text]")?.value;
+      if (brain_id) {
+        byId[brain_id] = { id: brain_id, label: label || byId[brain_id]?.label || brain_id, learn };
+      }
+      return { brain_id, learn };
+    });
+  return { brains: Object.values(byId), lineup };
 }
 
 async function pushRoster() {
@@ -342,25 +540,9 @@ async function pushRoster() {
     if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Roster update failed");
     state.rosterDirty = false;
     applyStatus(body);
-    $("status").textContent = "Hangar saved. Mixed learn on a shared brain forks a revision.";
+    $("status").textContent = "Hangar saved. A mixed learn on a shared brain forks a library revision.";
   } catch (err) {
     state.rosterDirty = false;
-    $("status").textContent = err.message;
-  }
-}
-
-async function addBrain() {
-  try {
-    const res = await fetch("/api/brains", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label: "New brain", learn: true }),
-    });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.detail || "Could not add a brain");
-    applyStatus(body);
-    $("status").textContent = "New brain in the library. Assign it to a seat in the hangar.";
-  } catch (err) {
     $("status").textContent = err.message;
   }
 }
@@ -377,8 +559,8 @@ async function reviseBrain(id, seat) {
     applyStatus(body);
     $("status").textContent =
       seat == null
-        ? `${brainLabel(id)} frozen. A learning revision was copied from it.`
-        : `Seat P${seat + 1} now flies a learning revision of ${brainLabel(id)}.`;
+        ? `${brainLabel(id)} copied into the library as a frozen revision.`
+        : `P${seat + 1} now flies a learning copy. The previous net is stored in the library.`;
   } catch (err) {
     $("status").textContent = err.message;
   }
@@ -391,7 +573,7 @@ async function dropBrain(id) {
     if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Could not delete brain");
     if (state.inspectId === id) state.inspectId = null;
     applyStatus(body);
-    $("status").textContent = "Brain deleted. Seats that used it got a fresh net.";
+    $("status").textContent = "Revision deleted.";
   } catch (err) {
     $("status").textContent = err.message;
   }
@@ -408,8 +590,6 @@ async function wipeBrain(id) {
     $("status").textContent = err.message;
   }
 }
-
-$("add-brain").addEventListener("click", addBrain);
 
 $("pause").addEventListener("click", () => {
   if (state.running) pauseFlights();

@@ -36,6 +36,7 @@ def test_health_and_index():
     assert "Sortie timeout" in page.text
     assert "Planes in the fight" in page.text
     assert "Last plane standing" in page.text
+    assert "Brain library" in page.text
 
 
 def test_empty_then_lesson():
@@ -151,6 +152,25 @@ def test_plane_count_gives_each_seat_its_own_brain():
     assert len(sortie["trace"][0]["planes"]) == 5
     bad = client.post("/api/planes", json={"n": 1})
     assert bad.status_code == 422
+
+
+def test_library_starts_empty_and_stores_hangar_revisions():
+    empty = client.get("/api/state").json()
+    assert empty["library"] == []
+    assert all(row["assigned"] for row in empty["roster"])
+    assert empty["roster"][0]["wins"] == 0
+    assert empty["roster"][0]["kills"] == 0
+    revised = client.post("/api/brains/p1/revise", json={"seat": 0}).json()
+    parent = next(row for row in revised["roster"] if row["id"] == "p1")
+    child_id = revised["lineup"][0]["brain_id"]
+    child = revised["brains"][child_id]
+    assert parent["assigned"] is False
+    assert child["assigned"] is True
+    assert child["parent_id"] == "p1"
+    assert parent["learn"] is False
+    assert child["learn"] is True
+    assert any(row["id"] == "p1" for row in revised["library"])
+    assert child_id not in {row["id"] for row in revised["library"]}
 
 
 def test_roster_share_revise_and_delete():
