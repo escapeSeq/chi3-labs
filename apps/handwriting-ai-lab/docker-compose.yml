@@ -1,0 +1,8 @@
+services:
+  handwriting-ai-lab:
+    build: .
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: "1"

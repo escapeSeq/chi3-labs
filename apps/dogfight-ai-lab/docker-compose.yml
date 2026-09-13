@@ -1,0 +1,14 @@
+services:
+  dogfight-ai-lab:
+    build: .
+    ports:
+      - "8082:8082"
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: "1"
+      DOGFIGHT_DATA: /data
+    volumes:
+      - dogfight-brains:/data
+
+volumes:
+  dogfight-brains:

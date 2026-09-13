@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Handwriting AI Lab — train, then use</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%23f4efe4' width='64' height='64'/%3E%3Ctext x='32' y='42' text-anchor='middle' fill='%232a4b7c' font-size='28' font-family='Georgia'%3E墨%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="paper" aria-hidden="true"></div>
+    <header class="mast">
+      <div class="brand">
+        <span class="mark">墨</span>
+        <div>
+          <p class="eyebrow">Chi3-sim · handwriting classroom</p>
+          <h1>How a net learns handwriting — then how it uses what it learned</h1>
+        </div>
+      </div>
+      <p class="lede">
+        Training is a lesson: labeled pages go in, the net guesses, a loss
+        scores the miss, and weights are nudged. Using is a frozen forward
+        pass: you write, pixels flow through those weights, and nothing is
+        rewritten. Write with the mouse on the pad.
+      </p>
+    </header>
+
+    <nav class="modes" role="tablist">
+      <button class="mode is-on" data-mode="teach" type="button">1. Teach the net</button>
+      <button class="mode" data-mode="ask" type="button">2. Ask the net</button>
+    </nav>
+
+    <main>
+      <section class="pad-col">
+        <h2>Ink pad</h2>
+        <p class="hint" id="pad-hint">Write a digit 0–9. Hold the mouse and draw.</p>
+        <div class="pad-wrap">
+          <canvas id="pad" width="420" height="420"></canvas>
+        </div>
+        <div class="pad-tools">
+          <button id="clear" type="button">Erase</button>
+          <p id="ink-status">No ink yet.</p>
+        </div>
+        <div id="teach-tools" class="teach-only">
+          <p class="hint">What digit did you write?</p>
+          <div class="labels" id="labels"></div>
+          <button id="keep" class="primary" type="button">Keep this page in the classroom</button>
+        </div>
+        <div id="ask-tools" class="ask-only">
+          <button id="read" class="primary" type="button">Read this writing</button>
+          <p class="hint">Weights will not change. That is the whole point of using.</p>
+        </div>
+      </section>
+
+      <section class="mid">
+        <article id="classroom-card" class="teach-only">
+          <header>
+            <h2>Classroom</h2>
+            <span id="class-count" class="pill">0 pages</span>
+          </header>
+          <p class="hint">
+            A starter set of stroke-drawn digits is already here. Your mouse
+            writing is added on top — that is how a training set grows.
+          </p>
+          <ol class="counts" id="counts"></ol>
+          <div class="lesson-knobs">
+            <label>Lesson length <input id="epochs" type="range" min="4" max="24" value="14" /> <span id="epochs-read">14 epochs</span></label>
+            <button id="train" class="primary" type="button">Run a lesson</button>
+            <button id="forget" type="button">Forget the weights</button>
+          </div>
+          <p id="train-status" class="hint">No lesson yet — guesses will be nearly random.</p>
+          <ol class="mini-loop" id="loop-steps">
+            <li data-step="0">Take a labeled page</li>
+            <li data-step="1">Guess (forward)</li>
+            <li data-step="2">Compare — loss</li>
+            <li data-step="3">Blame weights</li>
+            <li data-step="4">Nudge, repeat</li>
+          </ol>
+          <canvas id="loss" width="640" height="180"></canvas>
+        </article>
+
+        <article id="sees-card" class="ask-only">
+          <h2>What the net actually sees</h2>
+          <p class="hint">
+            Your stroke is not stored as a story. It is crushed to a 16×16
+            grid of numbers. That grid is the only input.
+          </p>
+          <canvas id="sees" width="256" height="256"></canvas>
+          <ol class="loop">
+            <li>Pixels become a vector of 256 numbers.</li>
+            <li>Each hidden neuron scores “does this look like my template?”</li>
+            <li>Ten output scores become a guess 0–9. Weights stay put.</li>
+          </ol>
+        </article>
+      </section>
+
+      <section class="board-col">
+        <h2>The net</h2>
+        <p class="hint" id="net-hint">16×16 input → 20 hidden ReLUs → 10 digit scores</p>
+        <canvas id="net" width="420" height="460"></canvas>
+        <div id="guess-box" class="guess">
+          <p class="eyebrow">Current guess</p>
+          <p id="guess-digit">?</p>
+          <p id="guess-note">Write, then teach or ask.</p>
+        </div>
+        <h3>Hidden templates</h3>
+        <p class="hint">Each tile is one hidden neuron’s weights — the stroke it is hunting for.</p>
+        <canvas id="templates" width="420" height="120"></canvas>
+      </section>
+    </main>
+
+    <aside class="steps" aria-label="Training versus using">
+      <h2>Training vs using</h2>
+      <p>
+        A lesson walks all five steps, including the red ones: compare, blame,
+        nudge. Asking the net does only the forward guess. The weights stay
+        put — that is using, not learning.
+      </p>
+    </aside>
+
+    <footer>
+      <p>
+        Chi3-sim monorepo ·
+        <a href="http://localhost:8080">χ³ analog lab</a> ·
+        this classroom on port 8081 ·
+        <a href="http://localhost:8082">dogfight lab</a>
+      </p>
+    </footer>
+    <script src="/static/app.js" type="module"></script>
+  </body>
+</html>

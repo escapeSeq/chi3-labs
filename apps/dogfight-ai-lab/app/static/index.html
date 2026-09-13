@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dogfight AI Lab — two empty nets learn a turn fight</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%230c1418' width='64' height='64'/%3E%3Cpath d='M12 40 L32 16 L52 40 L32 32 Z' fill='%23e85d4c'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="mast">
+      <div class="brand">
+        <span class="mark">⌖</span>
+        <div>
+          <p class="eyebrow">Chi3-sim · aerial gunnery academy</p>
+          <h1>Two empty brains, one turn-radius gun fight</h1>
+        </div>
+      </div>
+      <p class="lede">
+        Each plane is a Dubins vehicle: it cannot spin in place. Yaw is capped
+        by speed ÷ turn radius, and the gun is welded to the nose. Both
+        policies start as random weights — no tactics. Sorties run
+        continuously: when one fight ends, the next starts on its own, and
+        each one is another trial-and-error update. Weights are stored on
+        <code>/data</code> so a restart keeps what they learned.
+      </p>
+    </header>
+
+    <section class="score">
+      <div class="pilot red">
+        <h2>Red</h2>
+        <p class="big" id="red-kills">0</p>
+        <p class="sub">kills</p>
+        <p id="red-extra">0 walls</p>
+        <p id="red-brain-line">24 hidden · 0 updates</p>
+      </div>
+      <div class="versus">
+        <p id="episode-read">Sortie 0</p>
+        <p id="empty-badge" class="badge">both models empty</p>
+      </div>
+      <div class="pilot blue">
+        <h2>Blue</h2>
+        <p class="big" id="blue-kills">0</p>
+        <p class="sub">kills</p>
+        <p id="blue-extra">0 walls</p>
+        <p id="blue-brain-line">24 hidden · 0 updates</p>
+      </div>
+    </section>
+
+    <main>
+      <section class="field-col">
+        <header>
+          <h2>The field</h2>
+          <p class="hint" id="field-hint">A 2-D square. Out of bounds is a crash. Mid-air contact is a double crash.</p>
+        </header>
+        <canvas id="field" width="720" height="720"></canvas>
+        <p class="caption" id="field-caption">Continuous flights — restarting the next sortie automatically.</p>
+      </section>
+
+      <aside class="panel">
+        <h2>Continuous flights</h2>
+        <button id="pause" class="primary" type="button">Pause flights</button>
+        <label>
+          Train this many sorties in a burst
+          <input id="episodes-num" type="number" min="100" max="1000000" value="100" />
+          <div class="burst-row">
+            <span>100</span>
+            <input id="episodes" type="range" min="0" max="1000" value="0" />
+            <span>1,000,000</span>
+          </div>
+        </label>
+        <label>
+          Sortie timeout — draw if both are still up
+          <input id="timeout-num" type="number" min="2" max="60" step="1" value="12" />
+          <div class="burst-row">
+            <span>2s</span>
+            <input id="timeout" type="range" min="2" max="60" step="1" value="12" />
+            <span>60s</span>
+          </div>
+          <p class="hint" id="timeout-read">12 s · 240 steps</p>
+        </label>
+        <button id="lesson" type="button">Train this burst, then keep flying</button>
+        <button id="reset-stats" type="button">Reset statistics</button>
+        <button id="forget" type="button">Wipe both brains</button>
+        <p class="hint" id="status">Flights loop on their own. Brains live on /data. Empty nets first — expect walls.</p>
+        <h3>Learning</h3>
+        <canvas id="chart" width="420" height="180"></canvas>
+        <blockquote id="lesson-note">
+          A kill requires pointing the nose. A crash is usually the wall — the
+          first thing an empty net learns is “don’t fly off the plot.”
+        </blockquote>
+      </aside>
+    </main>
+
+    <section class="intel">
+      <header class="intel-head">
+        <div>
+          <h2>Brains</h2>
+          <p class="hint">Each net is 10 inputs → 24 hidden ReLUs → 6 actions. Graph is the wiring; numbers are the weights.</p>
+        </div>
+        <nav class="tabs" aria-label="Brain view">
+          <button class="tab is-on" data-brain-tab="graph" type="button">Graph</button>
+          <button class="tab" data-brain-tab="numbers" type="button">Numbers</button>
+        </nav>
+      </header>
+      <div class="brains">
+        <article class="brain red">
+          <h2>Red brain</h2>
+          <p class="hint" id="red-arch">10 obs → 24 hidden ReLU → 6 actions</p>
+          <div class="brain-pane is-on" data-pane="graph">
+            <canvas id="red-net" width="640" height="420"></canvas>
+            <p class="caption">Line thickness is |weight|. Output glow is the probe mix.</p>
+            <div class="acts" id="red-acts"></div>
+          </div>
+          <div class="brain-pane" data-pane="numbers">
+            <dl class="meters">
+              <div><dt>Updates</dt><dd id="rb-upd">0</dd></div>
+              <div><dt>Weight L2 / count</dt><dd id="rb-l2">—</dd></div>
+              <div><dt>W1 / W2 RMS (growth)</dt><dd id="rb-rms">—</dd></div>
+              <div><dt>Baseline</dt><dd id="rb-base">—</dd></div>
+              <div><dt>Probe entropy / peak</dt><dd id="rb-ent">—</dd></div>
+              <div><dt>Hidden on / dead</dt><dd id="rb-hid">—</dd></div>
+              <div><dt>Favorite (probe)</dt><dd id="rb-fav">—</dd></div>
+            </dl>
+            <p class="hint" id="red-last">Last sortie mix: —</p>
+            <canvas id="red-w1" width="420" height="168"></canvas>
+            <p class="caption">W1 heatmap: 24 hidden × 10 inputs.</p>
+            <canvas id="red-weights" width="420" height="84"></canvas>
+            <p class="caption">W2 heatmap: 6 actions × 24 hidden.</p>
+          </div>
+        </article>
+        <article class="brain blue">
+          <h2>Blue brain</h2>
+          <p class="hint" id="blue-arch">10 obs → 24 hidden ReLU → 6 actions</p>
+          <div class="brain-pane is-on" data-pane="graph">
+            <canvas id="blue-net" width="640" height="420"></canvas>
+            <p class="caption">Line thickness is |weight|. Output glow is the probe mix.</p>
+            <div class="acts" id="blue-acts"></div>
+          </div>
+          <div class="brain-pane" data-pane="numbers">
+            <dl class="meters">
+              <div><dt>Updates</dt><dd id="bb-upd">0</dd></div>
+              <div><dt>Weight L2 / count</dt><dd id="bb-l2">—</dd></div>
+              <div><dt>W1 / W2 RMS (growth)</dt><dd id="bb-rms">—</dd></div>
+              <div><dt>Baseline</dt><dd id="bb-base">—</dd></div>
+              <div><dt>Probe entropy / peak</dt><dd id="bb-ent">—</dd></div>
+              <div><dt>Hidden on / dead</dt><dd id="bb-hid">—</dd></div>
+              <div><dt>Favorite (probe)</dt><dd id="bb-fav">—</dd></div>
+            </dl>
+            <p class="hint" id="blue-last">Last sortie mix: —</p>
+            <canvas id="blue-w1" width="420" height="168"></canvas>
+            <p class="caption">W1 heatmap: 24 hidden × 10 inputs.</p>
+            <canvas id="blue-weights" width="420" height="84"></canvas>
+            <p class="caption">W2 heatmap: 6 actions × 24 hidden.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="primer">
+      <article>
+        <h2>Why the turn radius matters</h2>
+        <p>
+          Instant heading changes would make this a pointing contest. A hard
+          radius means every shot is bought with a curve. The dashed circles
+          on the field are the only paths the plane is allowed to follow.
+        </p>
+      </article>
+      <article>
+        <h2>Why the gun only fires forward</h2>
+        <p>
+          Bullets inherit the nose heading and never steer. Getting a kill is
+          geometry: be behind, or cut across the circle, then squeeze. Firing
+          sideways does nothing — the net has to discover that.
+        </p>
+      </article>
+      <article>
+        <h2>Trial and error</h2>
+        <p>
+          After each sortie the policy gets a return: plus for a kill and for
+          pointing the nose, minus for walls and dying. REINFORCE raises the
+          probability of the action sequence that produced a better return.
+          That is all “learning” is here.
+        </p>
+      </article>
+    </section>
+
+    <footer>
+      <p>
+        Chi3-sim ·
+        <a href="http://localhost:8080">χ³ analog lab</a> ·
+        <a href="http://localhost:8081">handwriting lab</a> ·
+        this academy on port 8082
+      </p>
+    </footer>
+    <script src="/static/app.js" type="module"></script>
+  </body>
+</html>

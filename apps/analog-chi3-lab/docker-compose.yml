@@ -1,0 +1,8 @@
+services:
+  analog-chi3-lab:
+    build: .
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: "1"

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>χ³ Analog Lab — nonlinear computing at volume</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%23120c14' width='64' height='64'/%3E%3Ctext x='32' y='42' text-anchor='middle' fill='%23ff4d8d' font-size='22' font-family='monospace'%3Eχ3%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <header class="mast">
+      <div class="brand">
+        <span class="chi">χ³</span>
+        <div>
+          <p class="eyebrow">Chi3-sim · analog computing lab</p>
+          <h1>Nonlinear analog physics as a high-volume computer</h1>
+        </div>
+      </div>
+      <p class="lede">
+        A digital solver walks a graph one spin at a time. A χ³ analog fabric —
+        the same cubic nonlinearity that appears in Kerr optics and coherent
+        Ising machines — lets every oscillator and every coupling evolve
+        together. This lab shows parallel analog relaxation doing the
+        arithmetic of a huge search.
+      </p>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab is-on" data-tab="ising" type="button">Ising machine</button>
+      <button class="tab" data-tab="field" type="button">Kerr field slab</button>
+      <button class="tab" data-tab="primer" type="button">Why analog volume</button>
+    </nav>
+
+    <main>
+      <section id="panel-ising" class="panel is-on">
+        <aside class="rack">
+          <h2>Optical bench</h2>
+          <label>
+            Problem
+            <select id="kind">
+              <option value="planted_cut">Planted Max-Cut (known communities)</option>
+              <option value="erdos_renyi">Random dense graph</option>
+              <option value="ring_chords">Ring with chords</option>
+              <option value="frustrated_grid">Grid (local couplings)</option>
+            </select>
+          </label>
+          <label>
+            Oscillators N
+            <input id="n" type="range" min="8" max="80" value="28" />
+            <span id="n-readout">28</span>
+          </label>
+          <label>
+            Seed
+            <input id="seed" type="number" value="7" min="0" max="9999" />
+          </label>
+          <label>
+            Digital walker
+            <select id="digital-method">
+              <option value="metropolis">Metropolis (one flip / tick)</option>
+              <option value="greedy">Greedy local search</option>
+              <option value="brute">Brute force (N ≤ 18)</option>
+            </select>
+          </label>
+          <details>
+            <summary>Analog χ³ knobs</summary>
+            <label>
+              Pump ramp end
+              <input id="pump" type="range" min="0.6" max="2.2" step="0.05" value="1.35" />
+            </label>
+            <label>
+              Coupling ξ
+              <input id="coupling" type="range" min="0.05" max="0.7" step="0.01" value="0.22" />
+            </label>
+            <label>
+              Analog noise
+              <input id="noise" type="range" min="0" max="0.15" step="0.005" value="0.035" />
+            </label>
+          </details>
+          <div class="actions">
+            <button id="run" class="primary" type="button">Relax both machines</button>
+            <p class="hint" id="status">Idle · load a graph and fire the pump.</p>
+          </div>
+        </aside>
+
+        <div class="stage">
+          <div class="scope-row">
+            <article class="scope analog">
+              <header>
+                <h3>Analog CIM · all units at once</h3>
+                <span id="analog-badge" class="badge">χ³ fabric</span>
+              </header>
+              <canvas id="analog-graph" width="640" height="420"></canvas>
+              <p class="caption" id="analog-caption">
+                Amplitudes are continuous. Color is readout spin; radius is |xᵢ|.
+              </p>
+            </article>
+            <article class="scope digital">
+              <header>
+                <h3>Digital walker · one spin per tick</h3>
+                <span id="digital-badge" class="badge muted">serial</span>
+              </header>
+              <canvas id="digital-graph" width="640" height="420"></canvas>
+              <p class="caption" id="digital-caption">
+                Same instance. Each frame flips or holds a single bit.
+              </p>
+            </article>
+          </div>
+          <article class="trace">
+            <header>
+              <h3>Oscilloscope · cut quality vs computational effort</h3>
+              <label class="inline">
+                Playback
+                <input id="scrub" type="range" min="0" max="100" value="100" disabled />
+              </label>
+            </header>
+            <canvas id="energy" width="1200" height="220"></canvas>
+          </article>
+        </div>
+
+        <aside class="meters">
+          <h2>Volume</h2>
+          <dl id="metrics">
+            <div><dt>Configuration space</dt><dd id="m-space">—</dd></div>
+            <div><dt>Analog couplings / instant</dt><dd id="m-pair">—</dd></div>
+            <div><dt>Equivalent serial analog ops</dt><dd id="m-serial">—</dd></div>
+            <div><dt>Digital updates</dt><dd id="m-digital">—</dd></div>
+            <div><dt>Analog best cut</dt><dd id="m-acut">—</dd></div>
+            <div><dt>Digital best cut</dt><dd id="m-dcut">—</dd></div>
+            <div><dt>Cut ceiling (all edges)</dt><dd id="m-max">—</dd></div>
+          </dl>
+          <blockquote id="lesson">
+            Run the lab to watch analog volume compete with sequential search.
+          </blockquote>
+        </aside>
+      </section>
+
+      <section id="panel-field" class="panel">
+        <aside class="rack">
+          <h2>Kerr slab</h2>
+          <label>
+            Input field
+            <select id="field-pattern">
+              <option value="two_beams">Two overlapping beams</option>
+              <option value="lattice">Soft lattice</option>
+              <option value="noise_blob">Noisy blob</option>
+            </select>
+          </label>
+          <label>
+            Grid
+            <input id="field-size" type="range" min="24" max="72" step="8" value="48" />
+            <span id="field-size-readout">48×48</span>
+          </label>
+          <label>
+            χ³ depth γ
+            <input id="gamma" type="range" min="0" max="6" step="0.1" value="2.4" />
+            <span id="gamma-readout">2.4</span>
+          </label>
+          <button id="run-field" class="primary" type="button">Send field through the slab</button>
+          <p class="hint" id="field-status">
+            Diffraction mixes the whole frame, then every pixel writes its own Kerr phase.
+          </p>
+        </aside>
+        <div class="fields">
+          <figure>
+            <canvas id="f-in" width="280" height="280"></canvas>
+            <figcaption>Input intensity</figcaption>
+          </figure>
+          <figure>
+            <canvas id="f-mix" width="280" height="280"></canvas>
+            <figcaption>After analog diffraction</figcaption>
+          </figure>
+          <figure>
+            <canvas id="f-phase" width="280" height="280"></canvas>
+            <figcaption>χ³ Kerr phase γ|E|²</figcaption>
+          </figure>
+          <figure>
+            <canvas id="f-out" width="280" height="280"></canvas>
+            <figcaption>Output intensity</figcaption>
+          </figure>
+        </div>
+        <aside class="meters">
+          <h2>One slab, every pixel</h2>
+          <dl>
+            <div><dt>Pixels in parallel</dt><dd id="f-pix">—</dd></div>
+            <div><dt>Analog instants</dt><dd id="f-inst">—</dd></div>
+            <div><dt>Digital FLOPs to imitate</dt><dd id="f-flops">—</dd></div>
+          </dl>
+          <blockquote>
+            A thin nonlinear medium applies |E|²E everywhere at the speed of the
+            optical transient. The digital twin must loop the grid (or FFT it)
+            point by point.
+          </blockquote>
+        </aside>
+      </section>
+
+      <section id="panel-primer" class="panel primer">
+        <article>
+          <h2>What “high volume” means here</h2>
+          <p>
+            High-volume computation is not just “a hard problem.” It is a huge
+            number of arithmetic interactions that must happen to produce an
+            answer. Max-Cut on N spins has a 2<sup>N</sup> configuration space
+            and N² pairwise terms. A digital CPU issues those terms in a loop.
+            An analog χ³ network instantiates each term as a physical product —
+            current, optical interference, four-wave mixing — so the volume
+            arrives in one analog instant.
+          </p>
+          <ol>
+            <li>
+              <strong>Represent.</strong> Numbers become continuous amplitudes
+              xᵢ (optical field, voltage, current), not bits.
+            </li>
+            <li>
+              <strong>Couple.</strong> The matrix–vector product Jx is done by
+              the physics of the interconnect, not by N² multiply-adds in series.
+            </li>
+            <li>
+              <strong>Bend with χ³.</strong> The cubic term −x³ (Kerr saturation,
+              gain clamping) is the nonlinearity that turns a linear filter into
+              a computer: it bounds amplitudes and selects a binary readout.
+            </li>
+            <li>
+              <strong>Read.</strong> After a pump ramp, sign(xᵢ) is the spin.
+              Energy has usually fallen into a deep cut without enumerating states.
+            </li>
+          </ol>
+        </article>
+        <article>
+          <h2>The teaching model</h2>
+          <pre class="eq">ẋᵢ = (p − 1) xᵢ − xᵢ³ + ξ Σⱼ Jᵢⱼ xⱼ + η</pre>
+          <p>
+            This is a classroom Coherent Ising Machine. Real hardware uses
+            degenerate optical parametric oscillators, Kerr microcombs, or
+            analog electronics. The cubic is the fingerprint of χ³. Pump p(t)
+            is ramped so the system first explores, then saturates.
+          </p>
+          <p>
+            The second pane is even more literal optics: a 2-D field diffracts
+            (analog Fourier mixing) and then picks up a Kerr phase
+            e<sup>iγ|E|²</sup> in a single slab. Every pixel is a multiply.
+          </p>
+          <h3>Honest limits</h3>
+          <ul>
+            <li>Analog precision and noise bound the bit-depth of the answer.</li>
+            <li>Embedding a problem onto physical couplings is itself work.</li>
+            <li>NP-hard problems stay NP-hard; analog volume is a throughput story, not a complexity-class collapse.</li>
+          </ul>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Chi3-sim monorepo · educational model, not a claim of optical supremacy ·
+        <a href="http://localhost:8081">handwriting AI lab</a> ·
+        <a href="http://localhost:8082">dogfight lab</a>
+      </p>
+    </footer>
+    <script src="/static/app.js" type="module"></script>
+  </body>
+</html>

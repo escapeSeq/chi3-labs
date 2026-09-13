@@ -1,0 +1,41 @@
+# Chi3-sim monorepo compose file.
+# From the repository root:
+#   docker compose up --build
+#
+# Analog lab:        http://localhost:8080
+# Handwriting lab:   http://localhost:8081
+# Dogfight lab:      http://localhost:8082
+
+services:
+  analog-chi3-lab:
+    build:
+      context: ./apps/analog-chi3-lab
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: "1"
+
+  handwriting-ai-lab:
+    build:
+      context: ./apps/handwriting-ai-lab
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: "1"
+
+  dogfight-ai-lab:
+    build:
+      context: ./apps/dogfight-ai-lab
+    ports:
+      - "8082:8082"
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: "1"
+      DOGFIGHT_DATA: /data
+    volumes:
+      - dogfight-brains:/data
+
+volumes:
+  dogfight-brains:
