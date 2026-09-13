@@ -5,11 +5,12 @@ const state = {
   frames: [],
   i: 0,
   curve: [],
-  physics: { turn_radius: 0.12, arena: 1 },
+  physics: { turn_radius: 0.06, arena: 1, n_planes: 2 },
   running: true,
   loopId: 0,
   busy: false,
   timeoutDirty: false,
+  planesDirty: false,
 };
 
 const field = $("field");
@@ -126,6 +127,67 @@ $("timeout-num").addEventListener("change", () => {
   pushTimeout();
 });
 
+const PLANES_MIN = 2;
+const PLANES_MAX = 9;
+
+function matchup(n) {
+  const count = Math.min(PLANES_MAX, Math.max(PLANES_MIN, Math.round(Number(n) || PLANES_MIN)));
+  const red = Math.ceil(count / 2);
+  const blue = Math.floor(count / 2);
+  return { n: count, red, blue, label: `${red}v${blue}` };
+}
+
+function planeCount() {
+  return matchup($("planes-num").value).n;
+}
+
+function setPlaneCount(n) {
+  const m = matchup(n);
+  $("planes").value = String(m.n);
+  $("planes-num").value = String(m.n);
+  $("planes-read").textContent = `${m.n} planes · ${m.label}`;
+  $("matchup-read").textContent = m.label;
+  $("field-hint").textContent =
+    m.n === 2
+      ? "A 2-D square. Out of bounds is a crash. Mid-air contact is a crash."
+      : `A 2-D square. ${m.label} — each team shares a brain. Out of bounds is a crash. Mid-air contact is a crash.`;
+}
+
+async function pushPlanes() {
+  const n = planeCount();
+  setPlaneCount(n);
+  try {
+    const res = await fetch("/api/planes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ n }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail || "Plane count update failed");
+    state.planesDirty = false;
+    applyStatus(body);
+    $("status").textContent = `Next fight is ${matchup(n).label} (${n} planes).`;
+  } catch (err) {
+    state.planesDirty = false;
+    $("status").textContent = err.message;
+  }
+}
+
+$("planes").addEventListener("input", () => {
+  state.planesDirty = true;
+  setPlaneCount(Number($("planes").value));
+});
+
+$("planes").addEventListener("change", () => {
+  pushPlanes();
+});
+
+$("planes-num").addEventListener("change", () => {
+  state.planesDirty = true;
+  setPlaneCount(planeCount());
+  pushPlanes();
+});
+
 $("pause").addEventListener("click", () => {
   if (state.running) {
     pauseFlights();
@@ -213,6 +275,9 @@ function applyStatus(body) {
     state.physics = body.physics;
     if (!state.timeoutDirty && body.physics.timeout != null) {
       setTimeoutSeconds(body.physics.timeout);
+    }
+    if (!state.planesDirty && body.physics.n_planes != null) {
+      setPlaneCount(body.physics.n_planes);
     }
   }
   fillBrain("red", brains.red, t.last_actions?.red);
@@ -464,13 +529,42 @@ function xy(v) {
 }
 
 function drawEmpty() {
+  const m = matchup($("planes-num")?.value || state.physics.n_planes || PLANES_MIN);
+  const planes = [];
+  for (let i = 0; i < m.red; i += 1) {
+    planes.push({
+      name: i === 0 ? "red" : `red${i + 1}`,
+      team: "red",
+      x: 0.2,
+      y: m.red === 1 ? 0.22 : (i + 1) / (m.red + 1),
+      heading: 0.4,
+      alive: true,
+    });
+  }
+  for (let i = 0; i < m.blue; i += 1) {
+    planes.push({
+      name: i === 0 ? "blue" : `blue${i + 1}`,
+      team: "blue",
+      x: 0.8,
+      y: m.blue === 1 ? 0.78 : (i + 1) / (m.blue + 1),
+      heading: Math.PI + 0.4,
+      alive: true,
+    });
+  }
   drawField({
-    red: { x: 0.2, y: 0.22, heading: 0.4, alive: true },
-    blue: { x: 0.8, y: 0.78, heading: Math.PI + 0.4, alive: true },
+    red: planes.find((p) => p.team === "red"),
+    blue: planes.find((p) => p.team === "blue"),
+    planes,
     bullets: [],
     events: [],
     t: 0,
   });
+}
+
+function teamColor(team, idx) {
+  const base = team === "blue" ? [61, 184, 197] : [232, 93, 76];
+  const shade = 1 - 0.1 * (idx % 5);
+  return `rgb(${base.map((c) => Math.round(c * shade)).join(",")})`;
 }
 
 function drawField(frame) {
@@ -491,8 +585,14 @@ function drawField(frame) {
   }
   ctx.strokeStyle = "rgba(230,195,106,0.35)";
   ctx.strokeRect(xy(0), xy(0), xy(1) - xy(0), xy(1) - xy(0));
-  drawPlane(ctx, frame.red, "#e85d4c");
-  drawPlane(ctx, frame.blue, "#3db8c5");
+  const planes = frame.planes?.length ? frame.planes : [frame.red, frame.blue].filter(Boolean);
+  const teamIndex = { red: 0, blue: 0 };
+  for (const p of planes) {
+    const team = p.team || (String(p.name || "").startsWith("blue") ? "blue" : "red");
+    const idx = teamIndex[team] || 0;
+    teamIndex[team] = idx + 1;
+    drawPlane(ctx, p, teamColor(team, idx));
+  }
   for (const b of frame.bullets || []) {
     ctx.fillStyle = "#e6c36a";
     ctx.beginPath();
@@ -510,7 +610,7 @@ function drawPlane(ctx, p, color) {
   if (!p) return;
   const x = xy(p.x);
   const y = xy(p.y);
-  const r = state.physics.turn_radius || 0.12;
+  const r = state.physics.turn_radius || 0.06;
   if (p.alive) {
     ctx.strokeStyle = color;
     ctx.globalAlpha = 0.28;
@@ -575,9 +675,10 @@ function paintChart(curve) {
 async function boot() {
   const snap = await (await fetch("/api/state")).json();
   applyStatus(snap);
-  drawEmpty();
   setBurst(burstSize());
   if (snap.physics?.timeout != null) setTimeoutSeconds(snap.physics.timeout);
+  if (snap.physics?.n_planes != null) setPlaneCount(snap.physics.n_planes);
+  drawEmpty();
   if (snap.stored && !snap.empty) {
     $("status").textContent = `Restored brains from ${snap.data_dir}. Continuous flights resume.`;
   }

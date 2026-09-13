@@ -44,6 +44,10 @@ class TimeoutIn(BaseModel):
     seconds: float = Field(default=12.0, ge=2.0, le=60.0)
 
 
+class PlanesIn(BaseModel):
+    n: int = Field(default=2, ge=2, le=9)
+
+
 ACADEMY = Academy(np.random.default_rng(7), data_dir=DATA_DIR)
 
 
@@ -69,6 +73,10 @@ def _status() -> dict:
             "timeout": physics.seconds_from_steps(ACADEMY.max_steps),
             "min_timeout": physics.seconds_from_steps(physics.MIN_STEPS),
             "max_timeout": physics.seconds_from_steps(physics.MAX_STEPS_CAP),
+            "n_planes": ACADEMY.n_planes,
+            "min_planes": physics.MIN_PLANES,
+            "max_planes": physics.MAX_PLANES,
+            "teams": dict(zip(("red", "blue"), physics.team_counts(ACADEMY.n_planes))),
         },
     }
 
@@ -98,6 +106,12 @@ def reset_stats() -> dict:
 @app.post("/api/timeout")
 def timeout(body: TimeoutIn) -> dict:
     ACADEMY.set_max_steps(physics.steps_from_seconds(body.seconds))
+    return _status()
+
+
+@app.post("/api/planes")
+def planes(body: PlanesIn) -> dict:
+    ACADEMY.set_n_planes(body.n)
     return _status()
 
 

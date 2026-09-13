@@ -61,6 +61,14 @@ def test_timeout_round_trips_on_data_dir(tmp_path):
     assert second.max_steps == 80
 
 
+def test_plane_count_round_trips_on_data_dir(tmp_path):
+    first = Academy(np.random.default_rng(2), data_dir=tmp_path)
+    first.set_n_planes(7)
+    assert first.n_planes == 7
+    second = Academy(np.random.default_rng(9), data_dir=tmp_path)
+    assert second.n_planes == 7
+
+
 def test_reset_stats_keeps_stored_brains(tmp_path):
     academy = Academy(np.random.default_rng(5), data_dir=tmp_path)
     academy.lesson(episodes=6)

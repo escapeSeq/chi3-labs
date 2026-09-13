@@ -2,7 +2,7 @@ import numpy as np
 from fastapi.testclient import TestClient
 
 from app.main import ACADEMY, LessonIn, app
-from app.physics import MAX_STEPS
+from app.physics import MAX_STEPS, MIN_PLANES
 
 client = TestClient(app)
 
@@ -10,6 +10,7 @@ client = TestClient(app)
 def setup_function() -> None:
     ACADEMY.reset_models()
     ACADEMY.set_max_steps(MAX_STEPS, persist=False)
+    ACADEMY.set_n_planes(MIN_PLANES, persist=False)
 
 
 def test_health_and_index():
@@ -25,6 +26,7 @@ def test_health_and_index():
     assert "/data" in page.text
     assert "1000000" in page.text
     assert "Sortie timeout" in page.text
+    assert "Planes in the fight" in page.text
 
 
 def test_empty_then_lesson():
@@ -120,6 +122,25 @@ def test_timeout_updates_and_survives_wipe():
     assert stats["physics"]["max_steps"] == 160
     bad = client.post("/api/timeout", json={"seconds": 1})
     assert bad.status_code == 422
+
+
+def test_plane_count_updates_and_survives_wipe():
+    empty = client.get("/api/state").json()
+    assert empty["physics"]["n_planes"] == 2
+    assert empty["physics"]["teams"] == {"red": 1, "blue": 1}
+    body = client.post("/api/planes", json={"n": 5}).json()
+    assert body["physics"]["n_planes"] == 5
+    assert body["physics"]["teams"] == {"red": 3, "blue": 2}
+    reset = client.post("/api/reset").json()
+    assert reset["physics"]["n_planes"] == 5
+    stats = client.post("/api/reset-stats").json()
+    assert stats["physics"]["n_planes"] == 5
+    sortie = client.post("/api/sortie").json()
+    assert len(sortie["trace"][0]["planes"]) == 5
+    bad = client.post("/api/planes", json={"n": 1})
+    assert bad.status_code == 422
+    too_many = client.post("/api/planes", json={"n": 10})
+    assert too_many.status_code == 422
 
 
 def test_repeated_sorties_keep_score():

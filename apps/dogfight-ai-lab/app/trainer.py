@@ -11,10 +11,10 @@ import numpy as np
 
 if __package__:
     from .agents import ACTION_NAMES, Policy
-    from .physics import MAX_STEPS, World, clamp_max_steps
+    from .physics import MAX_STEPS, MIN_PLANES, World, clamp_max_steps, clamp_plane_count
 else:
     from agents import ACTION_NAMES, Policy
-    from physics import MAX_STEPS, World, clamp_max_steps
+    from physics import MAX_STEPS, MIN_PLANES, World, clamp_max_steps, clamp_plane_count
 
 CURVE_KEEP = 200
 SAVE_EVERY = 50
@@ -55,16 +55,11 @@ class Scoreboard:
 
     def note(self, events: list[str]) -> None:
         self.episodes += 1
-        if "red_kill" in events:
-            self.red_kills += 1
-        if "blue_kill" in events:
-            self.blue_kills += 1
-        if "red_wall" in events:
-            self.red_walls += 1
-        if "blue_wall" in events:
-            self.blue_walls += 1
-        if "midair" in events:
-            self.midairs += 1
+        self.red_kills += events.count("red_kill")
+        self.blue_kills += events.count("blue_kill")
+        self.red_walls += events.count("red_wall")
+        self.blue_walls += events.count("blue_wall")
+        self.midairs += events.count("midair")
         if "draw" in events and not any(e.endswith("_kill") or e.endswith("_wall") or e == "midair" for e in events):
             self.draws += 1
 
@@ -79,6 +74,7 @@ class Academy:
     curve: list[dict] = field(default_factory=list)
     empty: bool = True
     max_steps: int = MAX_STEPS
+    n_planes: int = MIN_PLANES
     stats_gen: int = 0
 
     def __post_init__(self) -> None:
@@ -112,6 +108,8 @@ class Academy:
                 self.empty = bool(payload.get("empty", self.score.episodes == 0))
                 if "max_steps" in payload:
                     self.max_steps = clamp_max_steps(payload["max_steps"])
+                if "n_planes" in payload:
+                    self.n_planes = clamp_plane_count(payload["n_planes"])
             else:
                 self.empty = False
             return True
@@ -134,6 +132,7 @@ class Academy:
                     "curve": _jsonable(self.curve[-CURVE_KEEP:]),
                     "empty": self.empty,
                     "max_steps": self.max_steps,
+                    "n_planes": self.n_planes,
                 }
             )
         )
@@ -160,6 +159,12 @@ class Academy:
         if persist:
             self.persist()
         return self.max_steps
+
+    def set_n_planes(self, n: int, persist: bool = True) -> int:
+        self.n_planes = clamp_plane_count(n)
+        if persist:
+            self.persist()
+        return self.n_planes
 
     def training_report(self) -> dict:
         score = self.score
@@ -212,19 +217,28 @@ class Academy:
 
     def play(self, learn: bool = True, lr: float = 0.012, record: bool = True, persist: bool = True) -> dict:
         epoch = self.stats_gen
-        world = World(self.rng, max_steps=self.max_steps)
-        red_roll: list[tuple[np.ndarray, int, float]] = []
-        blue_roll: list[tuple[np.ndarray, int, float]] = []
+        world = World(self.rng, max_steps=self.max_steps, n_planes=self.n_planes)
+        rolls: dict[str, list[tuple[np.ndarray, int, float]]] = {p.name: [] for p in world.planes}
+        last_obs: dict[str, np.ndarray] = {}
         frames = []
         while not world.done():
-            o_r = world.observe("red")
-            o_b = world.observe("blue")
-            a_r, _, _ = self.red.act(o_r)
-            a_b, _, _ = self.blue.act(o_b)
-            reward = world.step(a_r, a_b)
-            red_roll.append((o_r, a_r, reward["red"]))
-            blue_roll.append((o_b, a_b, reward["blue"]))
+            actions: dict[str, int] = {}
+            for plane in world.planes:
+                if not plane.alive:
+                    continue
+                obs = world.observe(plane.name)
+                last_obs[plane.name] = obs
+                policy = self.red if plane.team == "red" else self.blue
+                action, _, _ = policy.act(obs)
+                actions[plane.name] = action
+            reward = world.step(actions)
+            for name, action in actions.items():
+                rolls[name].append((last_obs[name], action, float(reward.get(name, 0.0))))
             frames.append(world.snapshot())
+        red_roll = [step for p in world.planes if p.team == "red" for step in rolls[p.name]]
+        blue_roll = [step for p in world.planes if p.team == "blue" for step in rolls[p.name]]
+        o_r = last_obs.get("red", world.observe("red"))
+        o_b = last_obs.get("blue", world.observe("blue"))
         if record and epoch == self.stats_gen:
             self.score.note(world.events)
         if learn:

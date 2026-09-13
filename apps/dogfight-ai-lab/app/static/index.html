@@ -39,6 +39,7 @@
       </div>
       <div class="versus">
         <p id="episode-read">Sortie 0</p>
+        <p id="matchup-read" class="sub">1v1</p>
         <p id="empty-badge" class="badge">both models empty</p>
       </div>
       <div class="pilot blue">
@@ -54,7 +55,7 @@
       <section class="field-col">
         <header>
           <h2>The field</h2>
-          <p class="hint" id="field-hint">A 2-D square. Out of bounds is a crash. Mid-air contact is a double crash.</p>
+          <p class="hint" id="field-hint">A 2-D square. Out of bounds is a crash. Mid-air contact is a crash. Add planes with the slider — red and blue split the flock.</p>
         </header>
         <canvas id="field" width="720" height="720"></canvas>
         <p class="caption" id="field-caption">Continuous flights — restarting the next sortie automatically.</p>
@@ -73,7 +74,17 @@
           </div>
         </label>
         <label>
-          Sortie timeout — draw if both are still up
+          Planes in the fight
+          <input id="planes-num" type="number" min="2" max="9" step="1" value="2" />
+          <div class="burst-row">
+            <span>2</span>
+            <input id="planes" type="range" min="2" max="9" step="1" value="2" />
+            <span>9</span>
+          </div>
+          <p class="hint" id="planes-read">2 planes · 1v1</p>
+        </label>
+        <label>
+          Sortie timeout — draw if both teams are still up
           <input id="timeout-num" type="number" min="2" max="60" step="1" value="12" />
           <div class="burst-row">
             <span>2s</span>
@@ -164,7 +175,7 @@
       <article>
         <h2>Why the turn radius matters</h2>
         <p>
-          Instant heading changes would make this a pointing contest. A hard
+          Instant heading changes would make this a pointing contest. A tight
           radius means every shot is bought with a curve. The dashed circles
           on the field are the only paths the plane is allowed to follow.
         </p>
