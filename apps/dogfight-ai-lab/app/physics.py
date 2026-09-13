@@ -50,6 +50,13 @@ def team_counts(n: int) -> tuple[int, int]:
     return (n + 1) // 2, n // 2
 
 
+def default_lineup(n: int) -> list[dict[str, str]]:
+    n_red, n_blue = team_counts(n)
+    return [{"team": "red", "brain_id": "red"} for _ in range(n_red)] + [
+        {"team": "blue", "brain_id": "blue"} for _ in range(n_blue)
+    ]
+
+
 def max_yaw_rate() -> float:
     return SPEED / TURN_RADIUS
 
@@ -65,6 +72,7 @@ class Plane:
     x: float
     y: float
     heading: float
+    brain_id: str = ""
     cooldown: float = 0.0
     alive: bool = True
 
@@ -72,6 +80,7 @@ class Plane:
         return {
             "name": self.name,
             "team": self.team,
+            "brain_id": self.brain_id or self.team,
             "x": self.x,
             "y": self.y,
             "heading": self.heading,
@@ -104,6 +113,7 @@ class World:
     rng: np.random.Generator
     max_steps: int = MAX_STEPS
     n_planes: int = MIN_PLANES
+    lineup: list[dict[str, str]] | None = None
     planes: list[Plane] = field(init=False)
     bullets: list[Bullet] = field(default_factory=list)
     t: float = 0.0
@@ -112,7 +122,13 @@ class World:
 
     def __post_init__(self) -> None:
         self.max_steps = max(1, int(self.max_steps))
-        self.n_planes = clamp_plane_count(self.n_planes)
+        if self.lineup:
+            self.lineup = [dict(slot) for slot in self.lineup]
+            self.n_planes = clamp_plane_count(len(self.lineup))
+            self.lineup = self.lineup[: self.n_planes]
+        else:
+            self.n_planes = clamp_plane_count(self.n_planes)
+            self.lineup = default_lineup(self.n_planes)
         self.reset()
 
     @property
@@ -124,49 +140,38 @@ class World:
         return self._lead("blue")
 
     def reset(self) -> None:
-        n_red, n_blue = team_counts(self.n_planes)
         jitter = lambda: float(self.rng.uniform(-0.06, 0.06))
+        slots = list(self.lineup or default_lineup(self.n_planes))
+        n_red = sum(1 for slot in slots if slot.get("team") == "red")
+        n_blue = sum(1 for slot in slots if slot.get("team") != "red")
         self.planes = []
-        if n_red == 1 and n_blue == 1:
-            self.planes = [
-                Plane(
-                    "red",
-                    "red",
-                    0.22 + jitter(),
-                    0.30 + jitter(),
-                    float(self.rng.uniform(0.05, 0.9)),
-                ),
-                Plane(
-                    "blue",
-                    "blue",
-                    0.78 + jitter(),
-                    0.70 + jitter(),
-                    float(self.rng.uniform(np.pi - 0.2, np.pi + 0.9)),
-                ),
-            ]
-        else:
-            for i in range(n_red):
-                y = (i + 1) / (n_red + 1)
-                self.planes.append(
-                    Plane(
-                        "red" if i == 0 else f"red{i + 1}",
-                        "red",
-                        float(np.clip(0.18 + jitter() * 0.5, 0.08, 0.42)),
-                        float(np.clip(y + jitter() * 0.35, 0.08, 0.92)),
-                        float(self.rng.uniform(0.05, 0.9)),
-                    )
-                )
-            for i in range(n_blue):
-                y = (i + 1) / (n_blue + 1)
-                self.planes.append(
-                    Plane(
-                        "blue" if i == 0 else f"blue{i + 1}",
-                        "blue",
-                        float(np.clip(0.82 + jitter() * 0.5, 0.58, 0.92)),
-                        float(np.clip(y + jitter() * 0.35, 0.08, 0.92)),
-                        float(self.rng.uniform(np.pi - 0.2, np.pi + 0.9)),
-                    )
-                )
+        red_i = 0
+        blue_i = 0
+        classic = n_red == 1 and n_blue == 1
+        for slot in slots:
+            team = "red" if slot.get("team") == "red" else "blue"
+            brain_id = str(slot.get("brain_id") or team)
+            if team == "red":
+                name = "red" if red_i == 0 else f"red{red_i + 1}"
+                if classic:
+                    x, y = 0.22 + jitter(), 0.30 + jitter()
+                else:
+                    frac = (red_i + 1) / (n_red + 1)
+                    x = float(np.clip(0.18 + jitter() * 0.5, 0.08, 0.42))
+                    y = float(np.clip(frac + jitter() * 0.35, 0.08, 0.92))
+                heading = float(self.rng.uniform(0.05, 0.9))
+                red_i += 1
+            else:
+                name = "blue" if blue_i == 0 else f"blue{blue_i + 1}"
+                if classic:
+                    x, y = 0.78 + jitter(), 0.70 + jitter()
+                else:
+                    frac = (blue_i + 1) / (n_blue + 1)
+                    x = float(np.clip(0.82 + jitter() * 0.5, 0.58, 0.92))
+                    y = float(np.clip(frac + jitter() * 0.35, 0.08, 0.92))
+                heading = float(self.rng.uniform(np.pi - 0.2, np.pi + 0.9))
+                blue_i += 1
+            self.planes.append(Plane(name, team, x, y, heading, brain_id=brain_id))
         self.bullets = []
         self.t = 0.0
         self.steps = 0

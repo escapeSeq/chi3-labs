@@ -150,7 +150,7 @@ footer,
 
 main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 340px;
   gap: 1rem;
   align-items: start;
 }
@@ -162,7 +162,8 @@ main {
 #red-w1,
 #blue-w1,
 #red-weights,
-#blue-weights {
+#blue-weights,
+.brain canvas {
   display: block;
   width: 100%;
   height: auto;
@@ -207,6 +208,72 @@ input[type="number"] {
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   margin: 0;
+}
+
+input[type="text"],
+select {
+  width: 100%;
+  background: #0f1a1e;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 0.32rem 0.4rem;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.78rem;
+}
+
+#lineup,
+#roster {
+  display: grid;
+  gap: 0.28rem;
+  margin: 0 0 0.55rem;
+}
+
+.lineup-row,
+.roster-row {
+  display: grid;
+  gap: 0.28rem;
+  align-items: center;
+}
+
+.lineup-row {
+  grid-template-columns: 3.2rem 4.6rem 1fr;
+}
+
+.roster-row {
+  grid-template-columns: 1fr auto auto auto;
+}
+
+.lineup-row .seat {
+  color: var(--amber);
+  font-size: 0.68rem;
+}
+
+.learn-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.22rem;
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.learn-toggle input {
+  accent-color: var(--amber);
+}
+
+.icon-btn {
+  width: auto;
+  margin: 0;
+  padding: 0.28rem 0.4rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+#add-brain {
+  margin-bottom: 0.7rem;
 }
 
 button {
@@ -333,6 +400,11 @@ blockquote {
   color: var(--blue);
 }
 
+.brain.extra h2,
+.brain.extra dd {
+  color: var(--amber);
+}
+
 .acts {
   display: grid;
   gap: 0.28rem;
@@ -367,6 +439,10 @@ blockquote {
 
 .act-track.is-blue > i {
   background: var(--blue);
+}
+
+.act-track.is-amber > i {
+  background: var(--amber);
 }
 
 .primer {

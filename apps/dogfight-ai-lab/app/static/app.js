@@ -11,6 +11,11 @@ const state = {
   busy: false,
   timeoutDirty: false,
   planesDirty: false,
+  rosterDirty: false,
+  roster: [],
+  lineup: [],
+  brains: {},
+  training: {},
 };
 
 const field = $("field");
@@ -141,16 +146,21 @@ function planeCount() {
   return matchup($("planes-num").value).n;
 }
 
-function setPlaneCount(n) {
+function setPlaneCount(n, teams) {
   const m = matchup(n);
+  if (teams && teams.red != null && teams.blue != null) {
+    m.red = Number(teams.red);
+    m.blue = Number(teams.blue);
+    m.label = `${m.red}v${m.blue}`;
+  }
   $("planes").value = String(m.n);
   $("planes-num").value = String(m.n);
   $("planes-read").textContent = `${m.n} planes · ${m.label}`;
   $("matchup-read").textContent = m.label;
   $("field-hint").textContent =
     m.n === 2
-      ? "A 2-D square. Out of bounds is a crash. Mid-air contact is a crash."
-      : `A 2-D square. ${m.label} — each team shares a brain. Out of bounds is a crash. Mid-air contact is a crash.`;
+      ? "A 2-D square. Out of bounds is a crash. Mid-air contact is a crash. Assign brains in the lineup."
+      : `A 2-D square. ${m.label} — assign a named brain to each seat. Out of bounds is a crash.`;
 }
 
 async function pushPlanes() {
@@ -187,6 +197,170 @@ $("planes-num").addEventListener("change", () => {
   setPlaneCount(planeCount());
   pushPlanes();
 });
+
+function rosterList() {
+  return state.roster?.length ? state.roster : Object.values(state.brains || {});
+}
+
+function brainLabel(id) {
+  const brain = state.brains?.[id] || rosterList().find((item) => item.id === id);
+  return brain?.label || id;
+}
+
+function renderLineup() {
+  const host = $("lineup");
+  const lineup = state.lineup?.length ? state.lineup : [];
+  const brains = rosterList();
+  host.replaceChildren();
+  lineup.forEach((slot, i) => {
+    const row = document.createElement("div");
+    row.className = "lineup-row";
+    const seat = document.createElement("span");
+    seat.className = "seat";
+    seat.textContent = `P${i + 1}`;
+    const team = document.createElement("select");
+    team.className = "team";
+    team.innerHTML = `<option value="red">red</option><option value="blue">blue</option>`;
+    team.value = slot.team === "blue" ? "blue" : "red";
+    const brain = document.createElement("select");
+    brain.className = "brain";
+    brains.forEach((item) => {
+      const opt = document.createElement("option");
+      opt.value = item.id;
+      opt.textContent = `${item.label}${item.learn ? "" : " (frozen)"}`;
+      brain.append(opt);
+    });
+    brain.value = slot.brain_id;
+    if (!brains.some((item) => item.id === slot.brain_id) && slot.brain_id) {
+      const opt = document.createElement("option");
+      opt.value = slot.brain_id;
+      opt.textContent = slot.brain_id;
+      brain.append(opt);
+      brain.value = slot.brain_id;
+    }
+    team.addEventListener("change", () => pushRoster());
+    brain.addEventListener("change", () => pushRoster());
+    row.append(seat, team, brain);
+    host.append(row);
+  });
+}
+
+function renderRoster() {
+  const host = $("roster");
+  host.replaceChildren();
+  rosterList().forEach((brain) => {
+    const row = document.createElement("div");
+    row.className = "roster-row";
+    row.dataset.brainId = brain.id;
+    const name = document.createElement("input");
+    name.type = "text";
+    name.maxLength = 32;
+    name.value = brain.label || brain.id;
+    name.setAttribute("aria-label", "Brain name");
+    const learn = document.createElement("label");
+    learn.className = "learn-toggle";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = brain.learn !== false;
+    learn.append(box, document.createTextNode("learn"));
+    const wipe = document.createElement("button");
+    wipe.type = "button";
+    wipe.className = "icon-btn";
+    wipe.textContent = "wipe";
+    wipe.addEventListener("click", () => wipeOneBrain(brain.id));
+    name.addEventListener("input", () => {
+      state.rosterDirty = true;
+    });
+    name.addEventListener("change", () => {
+      pushRoster();
+    });
+    box.addEventListener("change", () => pushRoster());
+    row.append(name, learn, wipe);
+    if (brain.id !== "red" && brain.id !== "blue") {
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "icon-btn";
+      remove.textContent = "drop";
+      remove.addEventListener("click", () => dropBrain(brain.id));
+      row.append(remove);
+    }
+    host.append(row);
+  });
+}
+
+function readRosterForm() {
+  const brains = [...$("roster").querySelectorAll(".roster-row")].map((row) => ({
+    id: row.dataset.brainId,
+    label: row.querySelector("input[type=text]").value,
+    learn: row.querySelector("input[type=checkbox]").checked,
+  }));
+  const lineup = [...$("lineup").querySelectorAll(".lineup-row")].map((row) => ({
+    team: row.querySelector("select.team").value,
+    brain_id: row.querySelector("select.brain").value,
+  }));
+  return { brains, lineup };
+}
+
+async function pushRoster() {
+  const payload = readRosterForm();
+  try {
+    const res = await fetch("/api/roster", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail || "Roster update failed");
+    state.rosterDirty = false;
+    applyStatus(body);
+    $("status").textContent = "Lineup and brain names saved. Next fight uses this roster.";
+  } catch (err) {
+    state.rosterDirty = false;
+    $("status").textContent = err.message;
+  }
+}
+
+async function addBrain() {
+  try {
+    const res = await fetch("/api/brains", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: "New brain", learn: true }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail || "Could not add a brain");
+    applyStatus(body);
+    $("status").textContent = "Added a brain. Assign it to a plane in the lineup.";
+  } catch (err) {
+    $("status").textContent = err.message;
+  }
+}
+
+async function dropBrain(id) {
+  try {
+    const res = await fetch(`/api/brains/${id}`, { method: "DELETE" });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail || "Could not drop brain");
+    applyStatus(body);
+    $("status").textContent = `Dropped ${id}. Seats that used it fell back to a core brain.`;
+  } catch (err) {
+    $("status").textContent = err.message;
+  }
+}
+
+async function wipeOneBrain(id) {
+  try {
+    const res = await fetch(`/api/brains/${id}/wipe`, { method: "POST" });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail || "Wipe failed");
+    applyStatus(body);
+    $("status").textContent = `${brainLabel(id)} weights scrambled.`;
+  } catch (err) {
+    $("status").textContent = err.message;
+  }
+}
+
+$("add-brain").addEventListener("click", addBrain);
 
 $("pause").addEventListener("click", () => {
   if (state.running) {
@@ -253,7 +427,7 @@ $("forget").addEventListener("click", async () => {
   const body = await (await fetch("/api/reset", { method: "POST" })).json();
   applyStatus(body);
   drawEmpty();
-  $("status").textContent = "Weights scrambled on /data. Continuous flights restart from empty nets.";
+  $("status").textContent = "All brains scrambled on /data. Names and lineup kept. Continuous flights restart from empty nets.";
   resumeFlights();
 });
 
@@ -261,15 +435,24 @@ function applyStatus(body) {
   const s = body.score;
   const t = body.training || {};
   const brains = body.brains || {};
+  state.training = t;
+  if (body.roster) state.roster = body.roster;
+  if (body.lineup) state.lineup = body.lineup;
+  if (body.brains) state.brains = brains;
   if (body.action_names) ACTION_NAMES.splice(0, ACTION_NAMES.length, ...body.action_names);
   $("red-kills").textContent = s.red_kills;
   $("blue-kills").textContent = s.blue_kills;
   $("red-extra").textContent = `${s.red_walls} walls`;
   $("blue-extra").textContent = `${s.blue_walls} walls`;
-  $("red-brain-line").textContent = `${brains.red?.shape?.hidden ?? 24} hidden · ${brains.red?.updates ?? 0} updates`;
-  $("blue-brain-line").textContent = `${brains.blue?.shape?.hidden ?? 24} hidden · ${brains.blue?.updates ?? 0} updates`;
+  $("red-brain-line").textContent = teamBrainLine("red", brains);
+  $("blue-brain-line").textContent = teamBrainLine("blue", brains);
   $("episode-read").textContent = `Sortie ${s.episodes}`;
-  $("empty-badge").textContent = body.empty ? "both models empty" : "learning in progress";
+  const learners = rosterList().filter((b) => b.learn !== false);
+  $("empty-badge").textContent = body.empty
+    ? "brains empty"
+    : learners.length
+      ? "learning in progress"
+      : "brains frozen";
   $("empty-badge").classList.toggle("is-trained", !body.empty);
   if (body.physics) {
     state.physics = body.physics;
@@ -277,11 +460,20 @@ function applyStatus(body) {
       setTimeoutSeconds(body.physics.timeout);
     }
     if (!state.planesDirty && body.physics.n_planes != null) {
-      setPlaneCount(body.physics.n_planes);
+      setPlaneCount(body.physics.n_planes, body.physics.teams);
     }
   }
+  if (!state.rosterDirty) {
+    renderLineup();
+    renderRoster();
+  }
+  const redTitle = document.querySelector(".brain.red h2");
+  const blueTitle = document.querySelector(".brain.blue h2");
+  if (redTitle) redTitle.textContent = `${brains.red?.label || "Red"} brain`;
+  if (blueTitle) blueTitle.textContent = `${brains.blue?.label || "Blue"} brain`;
   fillBrain("red", brains.red, t.last_actions?.red);
   fillBrain("blue", brains.blue, t.last_actions?.blue);
+  renderExtraBrains(brains, t.last_actions?.brains || {});
   if (body.curve) {
     state.curve = body.curve;
     paintChart(body.curve);
@@ -290,6 +482,22 @@ function applyStatus(body) {
         "A kill requires pointing the nose. A crash is usually the wall — the first thing an empty net learns is “don’t fly off the plot.”";
     }
   }
+}
+
+function teamBrainLine(team, brains) {
+  const seats = (state.lineup || []).filter((slot) => slot.team === team);
+  if (!seats.length) {
+    const brain = brains[team];
+    return `${brain?.shape?.hidden ?? 24} hidden · ${brain?.updates ?? 0} updates`;
+  }
+  const names = seats.map((slot) => {
+    const brain = brains[slot.brain_id] || {};
+    const frozen = brain.learn === false ? " frozen" : "";
+    return `${brain.label || slot.brain_id}${frozen}`;
+  });
+  const unique = [...new Set(names)];
+  const updates = seats.map((slot) => brains[slot.brain_id]?.updates ?? 0);
+  return `${unique.join(" · ")} · ${Math.max(...updates, 0)} updates`;
 }
 
 function fillBrain(side, brain, lastActions) {
@@ -311,8 +519,49 @@ function fillBrain(side, brain, lastActions) {
   paintWeights(`${side}-weights`, brain.w2, side);
 }
 
+function renderExtraBrains(brains, lastByBrain) {
+  const host = $("brains");
+  const tpl = $("brain-card-tpl");
+  if (!host || !tpl) return;
+  const extras = rosterList().filter((brain) => brain.id !== "red" && brain.id !== "blue");
+  host.querySelectorAll(".brain.extra").forEach((el) => {
+    if (!extras.some((brain) => brain.id === el.dataset.brainId)) el.remove();
+  });
+  extras.forEach((meta) => {
+    const brain = brains[meta.id] || meta;
+    let article = host.querySelector(`[data-brain-id="${meta.id}"]`);
+    if (!article) {
+      article = tpl.content.firstElementChild.cloneNode(true);
+      article.dataset.brainId = meta.id;
+      host.append(article);
+    }
+    fillExtraBrain(article, brain, lastByBrain[meta.id]);
+  });
+}
+
+function fillExtraBrain(article, brain, lastActions) {
+  if (!article || !brain) return;
+  const hue = "amber";
+  article.querySelector("h2").textContent = `${brain.label || brain.id} brain`;
+  const shape = brain.shape || {};
+  article.querySelector(".arch").textContent = `${shape.obs ?? 10} obs → ${shape.hidden ?? 24} hidden ReLU → ${shape.actions ?? 6} actions`;
+  article.querySelector(".upd").textContent = String(brain.updates ?? 0);
+  article.querySelector(".l2").textContent = `${num(brain.weights?.l2, 2)} / ${brain.weights?.count ?? "—"}`;
+  article.querySelector(".rms").textContent = `${num(brain.weights?.w1_rms)} (${num(brain.weights?.w1_growth)}×) · ${num(brain.weights?.w2_rms)} (${num(brain.weights?.w2_growth)}×)`;
+  article.querySelector(".base").textContent = num(brain.baseline);
+  article.querySelector(".ent").textContent = `${num(brain.probe?.entropy)} / ${pct(brain.probe?.max_prob)}`;
+  article.querySelector(".hid").textContent = `${pct(brain.probe?.hidden_active)} on · ${brain.probe?.hidden_dead ?? 0} dead`;
+  article.querySelector(".fav").textContent = brain.favorite || "—";
+  article.querySelector(".last").textContent = `Last sortie mix: ${actionMix(lastActions)}`;
+  paintActions(article.querySelector(".acts"), brain.probe?.mean_probs || [], hue);
+  paintBrainNet(article.querySelector(".net"), brain, hue);
+  paintWeights(article.querySelector(".w1"), brain.w1, hue);
+  paintWeights(article.querySelector(".w2"), brain.w2, hue);
+}
+
 function paintActions(id, probs, side) {
-  const host = $(id);
+  const host = typeof id === "string" ? $(id) : id;
+  if (!host) return;
   host.replaceChildren();
   ACTION_NAMES.forEach((name, i) => {
     const p = Number(probs[i] || 0);
@@ -333,7 +582,8 @@ function paintActions(id, probs, side) {
 }
 
 function paintBrainNet(id, brain, side) {
-  const canvas = $(id);
+  const canvas = typeof id === "string" ? $(id) : id;
+  if (!canvas) return;
   const ctx = canvas.getContext("2d");
   const w = canvas.width;
   const h = canvas.height;
@@ -342,7 +592,7 @@ function paintBrainNet(id, brain, side) {
   const w1 = brain.w1;
   const w2 = brain.w2;
   if (!w1?.length || !w2?.length) return;
-  const plus = side === "red" ? [232, 93, 76] : [61, 184, 197];
+  const plus = side === "blue" ? [61, 184, 197] : side === "amber" ? [230, 195, 106] : [232, 93, 76];
   const minus = [138, 160, 154];
   const nIn = w1[0].length;
   const nHid = w1.length;
@@ -417,12 +667,13 @@ function paintBrainNet(id, brain, side) {
 }
 
 function paintWeights(id, rows, side) {
-  const canvas = $(id);
+  const canvas = typeof id === "string" ? $(id) : id;
+  if (!canvas) return;
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = "#081014";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   if (!rows || !rows.length || !rows[0]?.length) return;
-  const plus = side === "red" ? [232, 93, 76] : [61, 184, 197];
+  const plus = side === "blue" ? [61, 184, 197] : side === "amber" ? [230, 195, 106] : [232, 93, 76];
   const minus = [138, 160, 154];
   const maxA = Math.max(...rows.flat().map((v) => Math.abs(v)), 1e-6);
   const cw = canvas.width / rows[0].length;
@@ -529,28 +780,37 @@ function xy(v) {
 }
 
 function drawEmpty() {
-  const m = matchup($("planes-num")?.value || state.physics.n_planes || PLANES_MIN);
+  const lineup = state.lineup?.length
+    ? state.lineup
+    : (() => {
+        const m = matchup($("planes-num")?.value || state.physics.n_planes || PLANES_MIN);
+        return [
+          ...Array.from({ length: m.red }, () => ({ team: "red", brain_id: "red" })),
+          ...Array.from({ length: m.blue }, () => ({ team: "blue", brain_id: "blue" })),
+        ];
+      })();
   const planes = [];
-  for (let i = 0; i < m.red; i += 1) {
+  let redI = 0;
+  let blueI = 0;
+  const nRed = lineup.filter((slot) => slot.team === "red").length;
+  const nBlue = lineup.filter((slot) => slot.team !== "red").length;
+  lineup.forEach((slot) => {
+    const team = slot.team === "blue" ? "blue" : "red";
+    const i = team === "red" ? redI : blueI;
+    const count = team === "red" ? nRed : nBlue;
     planes.push({
-      name: i === 0 ? "red" : `red${i + 1}`,
-      team: "red",
-      x: 0.2,
-      y: m.red === 1 ? 0.22 : (i + 1) / (m.red + 1),
-      heading: 0.4,
+      name: i === 0 ? team : `${team}${i + 1}`,
+      team,
+      brain_id: slot.brain_id,
+      brain_label: brainLabel(slot.brain_id),
+      x: team === "red" ? 0.2 : 0.8,
+      y: count === 1 ? (team === "red" ? 0.22 : 0.78) : (i + 1) / (count + 1),
+      heading: team === "red" ? 0.4 : Math.PI + 0.4,
       alive: true,
     });
-  }
-  for (let i = 0; i < m.blue; i += 1) {
-    planes.push({
-      name: i === 0 ? "blue" : `blue${i + 1}`,
-      team: "blue",
-      x: 0.8,
-      y: m.blue === 1 ? 0.78 : (i + 1) / (m.blue + 1),
-      heading: Math.PI + 0.4,
-      alive: true,
-    });
-  }
+    if (team === "red") redI += 1;
+    else blueI += 1;
+  });
   drawField({
     red: planes.find((p) => p.team === "red"),
     blue: planes.find((p) => p.team === "blue"),
@@ -641,6 +901,13 @@ function drawPlane(ctx, p, color) {
   ctx.closePath();
   ctx.fill();
   ctx.restore();
+  const tag = p.brain_label || (p.brain_id ? brainLabel(p.brain_id) : "");
+  if (tag) {
+    ctx.fillStyle = "rgba(231,239,230,0.72)";
+    ctx.font = "10px ui-monospace, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(tag, x, y + 18);
+  }
 }
 
 function paintChart(curve) {

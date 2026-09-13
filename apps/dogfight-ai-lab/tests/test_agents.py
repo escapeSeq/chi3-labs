@@ -69,6 +69,36 @@ def test_plane_count_round_trips_on_data_dir(tmp_path):
     assert second.n_planes == 7
 
 
+def test_roster_round_trips_on_data_dir(tmp_path):
+    first = Academy(np.random.default_rng(2), data_dir=tmp_path)
+    first.brains["red"].learn = False
+    first.set_roster(
+        [{"id": "red", "label": "Ace", "learn": False}, {"id": "blue", "label": "Rookie", "learn": True}],
+        [{"team": "red", "brain_id": "red"}, {"team": "blue", "brain_id": "blue"}],
+    )
+    first.add_brain("Spare", learn=False)
+    extra = next(bid for bid in first.brains if bid not in ("red", "blue"))
+    first.set_roster(
+        [slot.meta() for slot in first.brains.values()],
+        [{"team": "red", "brain_id": extra}, {"team": "blue", "brain_id": "blue"}],
+    )
+    second = Academy(np.random.default_rng(9), data_dir=tmp_path)
+    assert second.brains["red"].label == "Ace"
+    assert second.brains["red"].learn is False
+    assert second.brains["blue"].label == "Rookie"
+    assert extra in second.brains
+    assert second.lineup[0]["brain_id"] == extra
+
+
+def test_frozen_brain_does_not_learn():
+    academy = Academy(np.random.default_rng(4))
+    academy.brains["red"].learn = False
+    before = academy.red.W2.copy()
+    academy.play(learn=True, persist=False)
+    assert np.allclose(academy.red.W2, before)
+    assert academy.blue.updates == 1
+
+
 def test_reset_stats_keeps_stored_brains(tmp_path):
     academy = Academy(np.random.default_rng(5), data_dir=tmp_path)
     academy.lesson(episodes=6)

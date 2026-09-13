@@ -42,8 +42,9 @@ starts automatically, and each one still updates the two policies. Use
 100, up to 1,000,000) before the live loop continues. Use **Sortie timeout**
 to change how long a fight may last before it is scored a draw (2–60
 seconds; default 12 s / 240 steps). Use **Planes in the fight** to fly
-2–9 aircraft (split red vs blue; odd counts give red the extra plane).
-Turn radius is half the original, so yaw is twice as fast.
+2–9 aircraft. Name brains, assign them to seats, and uncheck **learn** to
+freeze a net. Odd counts give red the extra plane unless you change the
+lineup. Turn radius is half the original, so yaw is twice as fast.
 
 Both policies and the scoreboard are stored on **`/data`**
 (`red.npz`, `blue.npz`, `academy.json`) so a container restart keeps the

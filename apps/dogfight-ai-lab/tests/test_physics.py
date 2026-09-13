@@ -89,6 +89,21 @@ def test_multiplane_spawn():
     assert len(snap["planes"]) == 9
 
 
+def test_custom_lineup_sets_brain_ids():
+    w = World(
+        np.random.default_rng(3),
+        lineup=[
+            {"team": "red", "brain_id": "ace"},
+            {"team": "red", "brain_id": "red"},
+            {"team": "blue", "brain_id": "blue"},
+        ],
+    )
+    assert len(w.planes) == 3
+    assert [p.team for p in w.planes] == ["red", "red", "blue"]
+    assert [p.brain_id for p in w.planes] == ["ace", "red", "blue"]
+    assert w.snapshot()["planes"][0]["brain_id"] == "ace"
+
+
 def test_fight_lasts_until_team_wipe():
     w = World(np.random.default_rng(1), n_planes=4, max_steps=40)
     blues = [p for p in w.planes if p.team == "blue"]

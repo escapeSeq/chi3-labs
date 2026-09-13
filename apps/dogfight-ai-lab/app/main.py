@@ -48,12 +48,39 @@ class PlanesIn(BaseModel):
     n: int = Field(default=2, ge=2, le=9)
 
 
+class SlotIn(BaseModel):
+    team: str = Field(pattern="^(red|blue)$")
+    brain_id: str = Field(min_length=1, max_length=24)
+
+
+class BrainMetaIn(BaseModel):
+    id: str = Field(min_length=1, max_length=24)
+    label: str = Field(default="", min_length=0, max_length=32)
+    learn: bool = True
+
+
+class RosterIn(BaseModel):
+    brains: list[BrainMetaIn]
+    lineup: list[SlotIn] | None = None
+
+
+class BrainAddIn(BaseModel):
+    label: str = Field(default="New brain", min_length=1, max_length=32)
+    learn: bool = True
+
+
 ACADEMY = Academy(np.random.default_rng(7), data_dir=DATA_DIR)
 
 
 def _status() -> dict:
     paths = ACADEMY.brain_paths() or {}
-    stored = bool(paths) and paths["red"].is_file() and paths["blue"].is_file()
+    stored = bool(paths) and all(
+        paths[bid].is_file() for bid in ACADEMY.brains if bid in paths
+    )
+    roster = ACADEMY.roster_report()
+    brains = {row["id"]: row for row in roster}
+    n_red = sum(1 for slot in ACADEMY.lineup if slot["team"] == "red")
+    n_blue = sum(1 for slot in ACADEMY.lineup if slot["team"] == "blue")
     return {
         "empty": ACADEMY.empty,
         "score": ACADEMY.score.as_dict(),
@@ -61,7 +88,9 @@ def _status() -> dict:
         "data_dir": str(ACADEMY.data_dir) if ACADEMY.data_dir is not None else None,
         "stored": stored,
         "action_names": list(ACTION_NAMES),
-        "brains": {"red": ACADEMY.red.inspect(), "blue": ACADEMY.blue.inspect()},
+        "brains": brains,
+        "roster": roster,
+        "lineup": list(ACADEMY.lineup),
         "training": ACADEMY.training_report(),
         "physics": {
             "turn_radius": physics.TURN_RADIUS,
@@ -76,7 +105,7 @@ def _status() -> dict:
             "n_planes": ACADEMY.n_planes,
             "min_planes": physics.MIN_PLANES,
             "max_planes": physics.MAX_PLANES,
-            "teams": dict(zip(("red", "blue"), physics.team_counts(ACADEMY.n_planes))),
+            "teams": {"red": n_red, "blue": n_blue},
         },
     }
 
@@ -112,6 +141,44 @@ def timeout(body: TimeoutIn) -> dict:
 @app.post("/api/planes")
 def planes(body: PlanesIn) -> dict:
     ACADEMY.set_n_planes(body.n)
+    return _status()
+
+
+@app.post("/api/roster")
+def roster(body: RosterIn) -> dict:
+    ACADEMY.set_roster(
+        [item.model_dump() for item in body.brains],
+        [item.model_dump() for item in body.lineup] if body.lineup is not None else None,
+    )
+    return _status()
+
+
+@app.post("/api/brains")
+def add_brain(body: BrainAddIn) -> dict:
+    try:
+        ACADEMY.add_brain(label=body.label, learn=body.learn)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return _status()
+
+
+@app.delete("/api/brains/{brain_id}")
+def remove_brain(brain_id: str) -> dict:
+    try:
+        ACADEMY.remove_brain(brain_id)
+    except KeyError as exc:
+        raise HTTPException(404, f"unknown brain {brain_id}") from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return _status()
+
+
+@app.post("/api/brains/{brain_id}/wipe")
+def wipe_brain(brain_id: str) -> dict:
+    try:
+        ACADEMY.wipe_brain(brain_id)
+    except KeyError as exc:
+        raise HTTPException(404, f"unknown brain {brain_id}") from exc
     return _status()
 
 

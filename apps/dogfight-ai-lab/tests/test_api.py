@@ -8,6 +8,7 @@ client = TestClient(app)
 
 
 def setup_function() -> None:
+    ACADEMY.reset_flight_setup(persist=False)
     ACADEMY.reset_models()
     ACADEMY.set_max_steps(MAX_STEPS, persist=False)
     ACADEMY.set_n_planes(MIN_PLANES, persist=False)
@@ -27,6 +28,8 @@ def test_health_and_index():
     assert "1000000" in page.text
     assert "Sortie timeout" in page.text
     assert "Planes in the fight" in page.text
+    assert "Named brains" in page.text
+    assert "Lineup" in page.text
 
 
 def test_empty_then_lesson():
@@ -141,6 +144,57 @@ def test_plane_count_updates_and_survives_wipe():
     assert bad.status_code == 422
     too_many = client.post("/api/planes", json={"n": 10})
     assert too_many.status_code == 422
+
+
+def test_roster_names_learn_and_lineup():
+    empty = client.get("/api/state").json()
+    assert empty["brains"]["red"]["label"] == "Red"
+    assert empty["brains"]["red"]["learn"] is True
+    assert empty["lineup"] == [
+        {"team": "red", "brain_id": "red"},
+        {"team": "blue", "brain_id": "blue"},
+    ]
+    named = client.post(
+        "/api/roster",
+        json={
+            "brains": [
+                {"id": "red", "label": "Ace", "learn": False},
+                {"id": "blue", "label": "Rookie", "learn": True},
+            ],
+            "lineup": [
+                {"team": "red", "brain_id": "red"},
+                {"team": "blue", "brain_id": "blue"},
+            ],
+        },
+    ).json()
+    assert named["brains"]["red"]["label"] == "Ace"
+    assert named["brains"]["red"]["learn"] is False
+    assert named["brains"]["blue"]["label"] == "Rookie"
+    added = client.post("/api/brains", json={"label": "Spare", "learn": False}).json()
+    extra_id = next(row["id"] for row in added["roster"] if row["id"] not in ("red", "blue"))
+    assert extra_id
+    assigned = client.post(
+        "/api/roster",
+        json={
+            "brains": added["roster"],
+            "lineup": [
+                {"team": "red", "brain_id": extra_id},
+                {"team": "blue", "brain_id": "blue"},
+            ],
+        },
+    ).json()
+    assert assigned["lineup"][0]["brain_id"] == extra_id
+    sortie = client.post("/api/sortie").json()
+    assert sortie["trace"][0]["planes"][0]["brain_id"] == extra_id
+    frozen = ACADEMY.brains[extra_id].policy.updates
+    client.post("/api/sortie")
+    assert ACADEMY.brains[extra_id].policy.updates == frozen
+    client.post("/api/sortie")
+    assert ACADEMY.blue.updates >= 1
+    gone = client.delete(f"/api/brains/{extra_id}").json()
+    assert extra_id not in gone["brains"]
+    core = client.delete("/api/brains/red")
+    assert core.status_code == 400
 
 
 def test_repeated_sorties_keep_score():
