@@ -38,6 +38,9 @@ def test_health_and_index():
     assert "Sortie timeout" in page.text
     assert "Planes in the fight" in page.text
     assert "Last plane standing" in page.text
+    assert "One against the pack" in page.text
+    assert "Fight mode" in page.text
+    assert 'id="mode"' in page.text
     assert "Brain library" in page.text
 
 
@@ -308,6 +311,43 @@ def test_roster_share_revise_and_delete():
     extra = next(row for row in revised["roster"] if row["parent_id"] == "p1" and row["id"] not in ids)
     gone = client.delete(f"/api/brains/{extra['id']}").json()
     assert extra["id"] not in gone["brains"]
+
+
+def test_mode_switches_keep_brains_and_separate_stats():
+    empty = client.get("/api/state").json()
+    assert empty["mode"] == "ffa"
+    assert empty["physics"]["mode"] == "ffa"
+    client.post("/api/lesson", json={"episodes": 4})
+    trained = client.get("/api/state").json()
+    ffa_eps = trained["score"]["episodes"]
+    assert ffa_eps == 4
+    hunt = client.post("/api/mode", json={"mode": "hunt"}).json()
+    assert hunt["mode"] == "hunt"
+    assert hunt["score"]["episodes"] == 0
+    assert hunt["score"]["hunts"] == 0
+    assert hunt["score"]["escapes"] == 0
+    assert hunt["empty"] is False
+    assert [slot["brain_id"] for slot in hunt["lineup"]] == [slot["brain_id"] for slot in trained["lineup"]]
+    back = client.post("/api/mode", json={"mode": "ffa"}).json()
+    assert back["mode"] == "ffa"
+    assert back["score"]["episodes"] == ffa_eps
+    fallback = client.post("/api/mode", json={"mode": "nope"}).json()
+    assert fallback["mode"] == "ffa"
+
+
+def test_hunt_sortie_has_hunt_outcome():
+    switched = client.post("/api/mode", json={"mode": "hunt"}).json()
+    assert switched["mode"] == "hunt"
+    body = client.post("/api/sortie").json()
+    assert body["mode"] == "hunt"
+    assert body["summary"]["mode"] == "hunt"
+    assert body["summary"]["outcome"] in {"escape", "wipe", "hunt", "clean_hunt", "prey_crash", "midair"}
+    assert "prey_kills" in body["score"]
+    assert "pack_losses" in body["score"]
+    trace = body["trace"][0]
+    assert trace["mode"] == "hunt"
+    assert trace["planes"][0]["role"] == "prey"
+    assert all(plane["role"] == "pack" for plane in trace["planes"][1:])
 
 
 def test_repeated_sorties_keep_score():

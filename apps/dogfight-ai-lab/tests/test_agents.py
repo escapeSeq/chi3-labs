@@ -52,6 +52,22 @@ def test_brains_round_trip_on_data_dir(tmp_path):
     assert second.red.updates == 8
 
 
+def test_mode_and_hunt_stats_round_trip_on_data_dir(tmp_path):
+    first = Academy(np.random.default_rng(2), data_dir=tmp_path)
+    first.set_mode("hunt")
+    first.score.escapes = 3
+    first.score.hunts = 5
+    first.score.pack_losses = 8
+    first.persist()
+    second = Academy(np.random.default_rng(9), data_dir=tmp_path)
+    assert second.mode == "hunt"
+    assert second.score.escapes == 3
+    assert second.score.hunts == 5
+    assert second.score.pack_losses == 8
+    second.set_mode("ffa")
+    assert second.score.escapes == 0
+
+
 def test_timeout_round_trips_on_data_dir(tmp_path):
     first = Academy(np.random.default_rng(2), data_dir=tmp_path)
     first.set_max_steps(400)

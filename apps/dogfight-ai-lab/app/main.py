@@ -48,6 +48,10 @@ class PlanesIn(BaseModel):
     n: int = Field(default=2, ge=2, le=9)
 
 
+class ModeIn(BaseModel):
+    mode: str = Field(default="ffa", min_length=3, max_length=32)
+
+
 class SlotIn(BaseModel):
     brain_id: str = Field(min_length=1, max_length=24)
     learn: bool | None = None
@@ -92,8 +96,10 @@ def _status() -> dict:
         "roster": roster,
         "library": [row for row in roster if row.get("in_library")],
         "lineup": list(ACADEMY.lineup),
+        "mode": ACADEMY.mode,
         "training": ACADEMY.training_report(),
         "physics": {
+            "mode": ACADEMY.mode,
             "turn_radius": physics.TURN_RADIUS,
             "speed": physics.SPEED,
             "gun_range": physics.GUN_RANGE,
@@ -141,6 +147,12 @@ def timeout(body: TimeoutIn) -> dict:
 @app.post("/api/planes")
 def planes(body: PlanesIn) -> dict:
     ACADEMY.set_n_planes(body.n)
+    return _status()
+
+
+@app.post("/api/mode")
+def mode(body: ModeIn) -> dict:
+    ACADEMY.set_mode(body.mode)
     return _status()
 
 

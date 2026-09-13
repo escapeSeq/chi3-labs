@@ -16,6 +16,8 @@ const state = {
   busy: false,
   timeoutDirty: false,
   planesDirty: false,
+  modeDirty: false,
+  mode: "ffa",
   rosterDirty: false,
   roster: [],
   lineup: [],
@@ -234,13 +236,64 @@ function planeCount() {
   return Math.min(PLANES_MAX, Math.max(PLANES_MIN, Math.round(n)));
 }
 
+function fightMode() {
+  return state.mode === "hunt" ? "hunt" : "ffa";
+}
+
+function huntCopy() {
+  return {
+    escape: "escaped",
+    wipe: "pack wiped",
+    clean_hunt: "clean hunt",
+    hunt: "pack scored",
+    prey_crash: "prey crashed",
+    midair: "midair",
+  };
+}
+
+function syncFightCopy(n) {
+  const v = n ?? planeCount();
+  const hunt = fightMode() === "hunt";
+  text(
+    "planes-read",
+    hunt
+      ? `${v} planes · P1 is chased, the rest hunt`
+      : `${v} planes · each seat has its own brain unless you share one`
+  );
+  text("matchup-read", hunt ? `${v} planes · 1 vs pack` : `${v} planes · FFA`);
+  text(
+    "field-hint",
+    hunt
+      ? "One against the pack. P1 is chased. The fight ends when that plane dies, the pack is wiped, or time runs out."
+      : `Free-for-all, ${v} aircraft. Last plane left wins. Out of bounds is a crash.`
+  );
+  text("winner-label", hunt ? "Last outcome" : "Last winner");
+  text("draw-label", hunt ? "Escapes · hunts" : "Draws · midairs");
+  text(
+    "timeout-label",
+    hunt
+      ? "Sortie timeout — the chased plane escapes if still up"
+      : "Sortie timeout — draw if more than one is still up"
+  );
+  text(
+    "hangar-hint",
+    hunt
+      ? "P1 is the chased plane. The others hunt. Hangar, library, and revise stay the same. Hunt statistics are separate from last-plane-standing."
+      : "Brains on the planes in this fight. Click a column header to sort. Revise a seat to freeze that net in the library and fly a learning copy. Swapping a seat discards the old working copy — it does not archive it."
+  );
+}
+
+function setFightMode(mode) {
+  state.mode = mode === "hunt" ? "hunt" : "ffa";
+  if ($("mode")) $("mode").value = state.mode;
+  syncFightCopy();
+}
+
 function setPlaneCount(n) {
   const v = Math.min(PLANES_MAX, Math.max(PLANES_MIN, Math.round(Number(n) || PLANES_MIN)));
   $("planes").value = String(v);
   $("planes-num").value = String(v);
-  text("planes-read", `${v} planes · each seat has its own brain unless you share one`);
-  text("matchup-read", `${v} planes · FFA`);
-  text("field-hint", `Free-for-all, ${v} aircraft. Last plane left wins. Out of bounds is a crash.`);
+  syncFightCopy(v);
 }
 
 async function pushPlanes() {
@@ -256,7 +309,9 @@ async function pushPlanes() {
     if (!res.ok) throw new Error(body.detail || "Plane count update failed");
     state.planesDirty = false;
     applyStatus(body);
-    $("status").textContent = `Next fight has ${n} planes. New seats got their own brains.`;
+    $("status").textContent = fightMode() === "hunt"
+      ? `Next fight has ${n} planes. P1 is chased; new seats join the pack.`
+      : `Next fight has ${n} planes. New seats got their own brains.`;
   } catch (err) {
     state.planesDirty = false;
     $("status").textContent = err.message;
@@ -274,6 +329,40 @@ $("planes-num").addEventListener("change", () => {
   pushPlanes();
 });
 
+async function pushMode() {
+  const mode = $("mode")?.value === "hunt" ? "hunt" : "ffa";
+  setFightMode(mode);
+  try {
+    const res = await fetch("/api/mode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail || "Mode update failed");
+    state.modeDirty = false;
+    applyStatus(body);
+    $("status").textContent = mode === "hunt"
+      ? "One against the pack. P1 is chased. Hunt statistics are separate."
+      : "Last plane standing. Free-for-all statistics are separate.";
+    if (state.running) {
+      pauseFlights();
+      resumeFlights();
+    } else {
+      drawEmpty();
+    }
+  } catch (err) {
+    state.modeDirty = false;
+    $("status").textContent = err.message;
+  }
+}
+
+$("mode")?.addEventListener("change", () => {
+  state.modeDirty = true;
+  setFightMode($("mode").value);
+  pushMode();
+});
+
 function renderHangar() {
   const host = $("hangar");
   if (!host) return;
@@ -287,15 +376,21 @@ function renderHangar() {
       name: brain.label || slot.brain_id,
       revision: brain.revision || 0,
       learn: brain.learn !== false,
+      role: i === 0 ? "chased" : "hunt",
       wins: brain.wins ?? 0,
       kills: brain.kills ?? 0,
       walls: brain.walls ?? 0,
+      prey_kills: brain.prey_kills ?? 0,
+      pack_deaths: brain.pack_deaths ?? 0,
+      prey_escapes: brain.prey_escapes ?? 0,
+      pack_scores: brain.pack_scores ?? 0,
       updates: brain.updates ?? 0,
       win_rate: brain.win_rate ?? 0,
       favorite: brain.favorite || "—",
       brain,
     };
   });
+  const hunt = fightMode() === "hunt";
   const table = document.createElement("table");
   table.className = "stat-table";
   const thead = document.createElement("thead");
@@ -305,11 +400,22 @@ function renderHangar() {
     sortableHead("Brain", "name", "hangar"),
     sortableHead("Rev", "revision", "hangar", true),
     sortableHead("Learn", "learn", "hangar"),
-    sortableHead("Wins", "wins", "hangar", true),
-    sortableHead("Kills", "kills", "hangar", true),
-    sortableHead("Walls", "walls", "hangar", true),
+    ...(hunt
+      ? [
+          sortableHead("Role", "role", "hangar"),
+          sortableHead("Kills", "kills", "hangar", true),
+          sortableHead("Prey kills", "prey_kills", "hangar", true),
+          sortableHead("Pack deaths", "pack_deaths", "hangar", true),
+          sortableHead("Escapes", "prey_escapes", "hangar", true),
+          sortableHead("Hunts", "pack_scores", "hangar", true),
+        ]
+      : [
+          sortableHead("Wins", "wins", "hangar", true),
+          sortableHead("Kills", "kills", "hangar", true),
+          sortableHead("Walls", "walls", "hangar", true),
+          sortableHead("Win%", "win_rate", "hangar", true),
+        ]),
     sortableHead("Updates", "updates", "hangar", true),
-    sortableHead("Win%", "win_rate", "hangar", true),
     sortableHead("Fav", "favorite", "hangar"),
     document.createElement("th")
   );
@@ -322,7 +428,7 @@ function renderHangar() {
     tr.dataset.brainId = row.brain_id;
     const plane = document.createElement("td");
     const seat = document.createElement("span");
-    seat.className = "seat";
+    seat.className = hunt && row.seat === 0 ? "seat is-prey" : "seat";
     const swatch = document.createElement("i");
     swatch.className = "swatch";
     swatch.style.background = seatColor(row.seat);
@@ -378,11 +484,22 @@ function renderHangar() {
       nameCell,
       td(row.revision || "—", "num"),
       learnCell,
-      td(row.wins, "num"),
-      td(row.kills, "num"),
-      td(row.walls, "num"),
+      ...(hunt
+        ? [
+            td(row.role),
+            td(row.kills, "num"),
+            td(row.prey_kills, "num"),
+            td(row.pack_deaths, "num"),
+            td(row.prey_escapes, "num"),
+            td(row.pack_scores, "num"),
+          ]
+        : [
+            td(row.wins, "num"),
+            td(row.kills, "num"),
+            td(row.walls, "num"),
+            td(ratePct(row.win_rate), "num"),
+          ]),
       td(row.updates, "num"),
-      td(ratePct(row.win_rate), "num"),
       td(row.favorite),
       actions
     );
@@ -404,9 +521,14 @@ function renderRoster() {
     wins: brain.wins ?? 0,
     kills: brain.kills ?? 0,
     walls: brain.walls ?? 0,
+    prey_kills: brain.prey_kills ?? 0,
+    pack_deaths: brain.pack_deaths ?? 0,
+    prey_escapes: brain.prey_escapes ?? 0,
+    pack_scores: brain.pack_scores ?? 0,
     updates: brain.updates ?? 0,
     win_rate: brain.win_rate ?? 0,
   }));
+  const hunt = fightMode() === "hunt";
   const table = document.createElement("table");
   table.className = "stat-table";
   const thead = document.createElement("thead");
@@ -415,11 +537,21 @@ function renderRoster() {
     sortableHead("Brain", "name", "library"),
     sortableHead("From", "from", "library"),
     sortableHead("Rev", "revision", "library", true),
-    sortableHead("Wins", "wins", "library", true),
-    sortableHead("Kills", "kills", "library", true),
-    sortableHead("Walls", "walls", "library", true),
+    ...(hunt
+      ? [
+          sortableHead("Kills", "kills", "library", true),
+          sortableHead("Prey kills", "prey_kills", "library", true),
+          sortableHead("Pack deaths", "pack_deaths", "library", true),
+          sortableHead("Escapes", "prey_escapes", "library", true),
+          sortableHead("Hunts", "pack_scores", "library", true),
+        ]
+      : [
+          sortableHead("Wins", "wins", "library", true),
+          sortableHead("Kills", "kills", "library", true),
+          sortableHead("Walls", "walls", "library", true),
+          sortableHead("Win%", "win_rate", "library", true),
+        ]),
     sortableHead("Updates", "updates", "library", true),
-    sortableHead("Win%", "win_rate", "library", true),
     sortableHead("Status", "learn", "library"),
     document.createElement("th")
   );
@@ -428,7 +560,7 @@ function renderRoster() {
   if (!stored.length) {
     const tr = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 10;
+    cell.colSpan = hunt ? 11 : 10;
     cell.className = "empty-lib";
     cell.textContent = "No stored revisions yet. Revise a hangar brain to freeze it here and fly a learning copy.";
     tr.append(cell);
@@ -483,11 +615,21 @@ function renderRoster() {
         nameCell,
         td(brain.from),
         td(brain.revision || "—", "num"),
-        td(brain.wins, "num"),
-        td(brain.kills, "num"),
-        td(brain.walls, "num"),
+        ...(hunt
+          ? [
+              td(brain.kills, "num"),
+              td(brain.prey_kills, "num"),
+              td(brain.pack_deaths, "num"),
+              td(brain.prey_escapes, "num"),
+              td(brain.pack_scores, "num"),
+            ]
+          : [
+              td(brain.wins, "num"),
+              td(brain.kills, "num"),
+              td(brain.walls, "num"),
+              td(ratePct(brain.win_rate), "num"),
+            ]),
         td(brain.updates, "num"),
-        td(ratePct(brain.win_rate), "num"),
         status,
         actions
       );
@@ -658,9 +800,17 @@ function applyStatus(body) {
   if (body.lineup) state.lineup = body.lineup;
   if (body.brains) state.brains = brains;
   if (body.action_names) ACTION_NAMES.splice(0, ACTION_NAMES.length, ...body.action_names);
+  if (body.mode) state.mode = body.mode === "hunt" ? "hunt" : "ffa";
+  if (body.physics?.mode) state.mode = body.physics.mode === "hunt" ? "hunt" : "ffa";
+  if (!state.modeDirty && $("mode")) $("mode").value = fightMode();
   text("episode-read", String(s.episodes ?? 0));
-  text("winner-read", s.last_winner ? brainLabel(s.last_winner) : "—");
-  text("draw-read", `${s.draws ?? 0} · ${s.midairs ?? 0}`);
+  if (fightMode() === "hunt") {
+    text("winner-read", huntCopy()[s.last_outcome] || (s.last_winner ? brainLabel(s.last_winner) : "—"));
+    text("draw-read", `${s.escapes ?? 0} · ${s.hunts ?? 0}`);
+  } else {
+    text("winner-read", s.last_winner ? brainLabel(s.last_winner) : "—");
+    text("draw-read", `${s.draws ?? 0} · ${s.midairs ?? 0}`);
+  }
   const learners = rosterList().filter((b) => b.learn !== false);
   text("empty-badge", body.empty ? "brains empty" : learners.length ? "learning in progress" : "brains frozen");
   $("empty-badge")?.classList.toggle("is-trained", !body.empty);
@@ -669,6 +819,9 @@ function applyStatus(body) {
     state.physics = body.physics;
     if (!state.timeoutDirty && body.physics.timeout != null) setTimeoutSeconds(body.physics.timeout);
     if (!state.planesDirty && body.physics.n_planes != null) setPlaneCount(body.physics.n_planes);
+    else syncFightCopy();
+  } else {
+    syncFightCopy();
   }
   if (!state.rosterDirty) {
     renderHangar();
@@ -683,7 +836,12 @@ function applyStatus(body) {
     state.curve = body.curve;
     paintChart(body.curve);
     if (!body.curve.length) {
-      text("lesson-note", "Survive. Point the nose. A crash is usually the wall.");
+      text(
+        "lesson-note",
+        fightMode() === "hunt"
+          ? "Stay alive. Every hunter you take down helps. Dying ends the sortie."
+          : "Survive. Point the nose. A crash is usually the wall."
+      );
     }
   }
 }
@@ -692,6 +850,24 @@ function renderWinStrip(score) {
   const host = $("win-strip");
   if (!host) return;
   host.replaceChildren();
+  if (fightMode() === "hunt") {
+    const summary = document.createElement("span");
+    summary.className = "win-chip pack";
+    summary.textContent = `escapes ${score.escapes || 0} · hunts ${score.hunts || 0} · clean ${score.clean_hunts || 0} · wipes ${score.pack_wipes || 0} · pack lost ${score.pack_losses || 0}`;
+    host.append(summary);
+    const preyKills = score.prey_kills || {};
+    const packDeaths = score.pack_deaths || {};
+    const escapes = score.prey_escapes || {};
+    const hunts = score.pack_scores || {};
+    const ids = [...new Set([...Object.keys(preyKills), ...Object.keys(packDeaths), ...Object.keys(escapes), ...Object.keys(hunts), ...rosterList().map((b) => b.id)])];
+    ids.forEach((id) => {
+      const chip = document.createElement("span");
+      chip.className = "win-chip";
+      chip.textContent = `${brainLabel(id)} ${preyKills[id] || 0} prey kills · ${packDeaths[id] || 0} pack deaths · ${escapes[id] || 0} escapes · ${hunts[id] || 0} hunts`;
+      host.append(chip);
+    });
+    return;
+  }
   const wins = score.wins || {};
   const kills = score.kills || {};
   const ids = [...new Set([...Object.keys(wins), ...Object.keys(kills), ...rosterList().map((b) => b.id)])];
@@ -905,7 +1081,9 @@ function resumeFlights() {
   state.loopId += 1;
   state.busy = false;
   setPauseLabel();
-  $("status").textContent = "Continuous flights. Last plane standing, then the next sortie starts.";
+  $("status").textContent = fightMode() === "hunt"
+    ? "Continuous flights. Hunt ends when the chased plane dies, the pack is wiped, or time runs out."
+    : "Continuous flights. Last plane standing, then the next sortie starts.";
   flyNext(state.loopId);
 }
 
@@ -955,6 +1133,7 @@ function drawEmpty() {
       x: 0.5 + radius * Math.cos(angle),
       y: 0.5 + radius * Math.sin(angle),
       heading: angle + Math.PI,
+      role: fightMode() === "hunt" ? (i === 0 ? "prey" : "pack") : "ffa",
       alive: true,
     };
   });
@@ -1014,6 +1193,13 @@ function drawPlane(ctx, p, color) {
     ctx.moveTo(x, y);
     ctx.lineTo(xy(p.x + 0.22 * Math.cos(p.heading)), xy(p.y + 0.22 * Math.sin(p.heading)));
     ctx.strokeStyle = "rgba(230,195,106,0.35)";
+    ctx.stroke();
+  }
+  if (p.role === "prey" && p.alive) {
+    ctx.beginPath();
+    ctx.arc(x, y, 18, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(230,195,106,0.7)";
+    ctx.lineWidth = 2;
     ctx.stroke();
   }
   ctx.save();

@@ -361,6 +361,15 @@ input[type="number"]::-webkit-outer-spin-button {
   vertical-align: middle;
 }
 
+.seat.is-prey .swatch {
+  box-shadow: 0 0 0 2px var(--amber);
+}
+
+.win-chip.pack {
+  border-color: rgba(232, 93, 76, 0.4);
+  color: var(--ink);
+}
+
 .learn-toggle {
   display: flex;
   align-items: center;

@@ -8,7 +8,7 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%230c1418' width='64' height='64'/%3E%3Cpath d='M12 40 L32 16 L52 40 L32 32 Z' fill='%23e85d4c'/%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=burst-10m-timeout-600" />
+    <link rel="stylesheet" href="/static/styles.css?v=hunt-mode" />
   </head>
   <body>
     <header class="mast">
@@ -35,11 +35,11 @@
         <p class="big" id="episode-read">0</p>
       </div>
       <div class="stat">
-        <p class="sub">Last winner</p>
+        <p class="sub" id="winner-label">Last winner</p>
         <p class="big win" id="winner-read">—</p>
       </div>
       <div class="stat">
-        <p class="sub">Draws · midairs</p>
+        <p class="sub" id="draw-label">Draws · midairs</p>
         <p class="big" id="draw-read">0 · 0</p>
       </div>
       <div class="versus">
@@ -63,6 +63,13 @@
         <h2>Flights</h2>
         <button id="pause" class="primary" type="button">Pause flights</button>
         <label>
+          Fight mode
+          <select id="mode">
+            <option value="ffa">Last plane standing</option>
+            <option value="hunt">One against the pack</option>
+          </select>
+        </label>
+        <label>
           Train this many sorties in a burst
           <input id="episodes-num" type="number" min="100" max="10000000" value="1000000" />
           <div class="burst-row">
@@ -82,7 +89,7 @@
           <p class="hint" id="planes-read">2 planes · each seat has its own brain</p>
         </label>
         <label>
-          Sortie timeout — draw if more than one is still up
+          <span id="timeout-label">Sortie timeout — draw if more than one is still up</span>
           <input id="timeout-num" type="number" min="10" max="600" step="1" value="600" />
           <div class="burst-row">
             <span>10s</span>
@@ -105,7 +112,7 @@
       <article class="hangar">
         <header>
           <h2>Hangar</h2>
-          <p class="hint">Brains on the planes in this fight. Click a column header to sort. Revise a seat to freeze that net in the library and fly a learning copy. Swapping a seat discards the old working copy — it does not archive it.</p>
+          <p class="hint" id="hangar-hint">Brains on the planes in this fight. Click a column header to sort. Revise a seat to freeze that net in the library and fly a learning copy. Swapping a seat discards the old working copy — it does not archive it.</p>
         </header>
         <div class="table-scroll" id="hangar"></div>
       </article>
@@ -175,6 +182,16 @@
         </p>
       </article>
       <article>
+        <h2>One against the pack</h2>
+        <p>
+          P1 is chased. Everyone else hunts. The sortie ends when the chased
+          plane dies, the pack is wiped, or the clock runs out. The pack wants
+          a kill without losing hunters. The chased plane wants as many pack
+          kills as it can take. Hunt stats are separate; hangar and library
+          stay the same.
+        </p>
+      </article>
+      <article>
         <h2>Revisions</h2>
         <p>
           Freeze a flying net with <em>revise</em>. The frozen parent lands in
@@ -194,6 +211,6 @@
         this academy on port 8082
       </p>
     </footer>
-    <script src="/static/app.js?v=burst-10m-timeout-600" type="module"></script>
+    <script src="/static/app.js?v=hunt-mode" type="module"></script>
   </body>
 </html>

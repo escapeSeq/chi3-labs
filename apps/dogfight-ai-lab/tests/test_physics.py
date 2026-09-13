@@ -91,6 +91,47 @@ def test_fight_lasts_until_one_plane():
     assert w.done()
 
 
+def test_hunt_ends_when_prey_dies_even_if_pack_remains():
+    hunt = World(np.random.default_rng(0), n_planes=4, mode="hunt", max_steps=40)
+    ffa = World(np.random.default_rng(0), n_planes=4, max_steps=40)
+    assert hunt.prey().role == "prey"
+    assert all(p.role == "pack" for p in hunt.pack())
+    assert not hunt.done()
+    hunt.prey().alive = False
+    assert hunt.done()
+    ffa.planes[0].alive = False
+    assert not ffa.done()
+
+
+def test_hunt_pack_wipe_and_timeout_escape():
+    wiped = World(np.random.default_rng(0), n_planes=3, mode="hunt", max_steps=40)
+    for plane in wiped.pack():
+        plane.alive = False
+    assert wiped.done()
+    clock = World(np.random.default_rng(1), n_planes=3, mode="hunt", max_steps=4)
+    while not clock.done():
+        clock.step({plane.name: 1 for plane in clock.planes})
+    assert "escape" in clock.events
+    assert "draw" not in clock.events
+    assert clock.prey().alive
+
+
+def test_hunt_prey_kill_hurts_the_pack():
+    from app.physics import Bullet
+
+    w = World(np.random.default_rng(4), n_planes=3, mode="hunt")
+    prey, hunter, other = w.planes
+    hunter.x, hunter.y = 0.5, 0.5
+    other.x, other.y = 0.8, 0.8
+    rewards = {p.name: 0.0 for p in w.planes}
+    w.bullets = [Bullet(0.5, 0.5, 0.0, prey.name)]
+    w._hits(rewards)
+    assert not hunter.alive
+    assert other.alive
+    assert rewards[prey.name] > 0
+    assert rewards[other.name] < 0
+
+
 def test_bullets_hit_any_other_plane():
     from app.physics import Bullet
 

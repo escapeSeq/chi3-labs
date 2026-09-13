@@ -13,10 +13,10 @@ import numpy as np
 
 if __package__:
     from .agents import ACTION_NAMES, Policy
-    from .physics import MAX_STEPS, MIN_PLANES, World, clamp_max_steps, clamp_plane_count, default_lineup, plane_id
+    from .physics import MODE_FFA, MODE_HUNT, MAX_STEPS, MIN_PLANES, World, clamp_max_steps, clamp_mode, clamp_plane_count, default_lineup, plane_id
 else:
     from agents import ACTION_NAMES, Policy
-    from physics import MAX_STEPS, MIN_PLANES, World, clamp_max_steps, clamp_plane_count, default_lineup, plane_id
+    from physics import MODE_FFA, MODE_HUNT, MAX_STEPS, MIN_PLANES, World, clamp_max_steps, clamp_mode, clamp_plane_count, default_lineup, plane_id
 
 CURVE_KEEP = 200
 SAVE_EVERY = 50
@@ -33,6 +33,17 @@ class Scoreboard:
     draws: int = 0
     episodes: int = 0
     last_winner: str | None = None
+    escapes: int = 0
+    hunts: int = 0
+    clean_hunts: int = 0
+    pack_wipes: int = 0
+    pack_losses: int = 0
+    prey_kills: dict[str, int] = field(default_factory=dict)
+    prey_escapes: dict[str, int] = field(default_factory=dict)
+    pack_scores: dict[str, int] = field(default_factory=dict)
+    pack_deaths: dict[str, int] = field(default_factory=dict)
+    last_outcome: str | None = None
+    last_pack_losses: int = 0
 
     def as_dict(self) -> dict:
         return {
@@ -43,6 +54,17 @@ class Scoreboard:
             "draws": self.draws,
             "episodes": self.episodes,
             "last_winner": self.last_winner,
+            "escapes": self.escapes,
+            "hunts": self.hunts,
+            "clean_hunts": self.clean_hunts,
+            "pack_wipes": self.pack_wipes,
+            "pack_losses": self.pack_losses,
+            "prey_kills": dict(self.prey_kills),
+            "prey_escapes": dict(self.prey_escapes),
+            "pack_scores": dict(self.pack_scores),
+            "pack_deaths": dict(self.pack_deaths),
+            "last_outcome": self.last_outcome,
+            "last_pack_losses": self.last_pack_losses,
             "red_kills": int(self.kills.get("p1", 0)),
             "blue_kills": int(self.kills.get("p2", 0)),
             "red_walls": int(self.walls.get("p1", 0)),
@@ -59,11 +81,33 @@ class Scoreboard:
             draws=int(payload.get("draws", 0)),
             episodes=int(payload.get("episodes", 0)),
             last_winner=payload.get("last_winner"),
+            escapes=int(payload.get("escapes", 0)),
+            hunts=int(payload.get("hunts", 0)),
+            clean_hunts=int(payload.get("clean_hunts", 0)),
+            pack_wipes=int(payload.get("pack_wipes", 0)),
+            pack_losses=int(payload.get("pack_losses", 0)),
+            prey_kills=_int_map(payload.get("prey_kills")),
+            prey_escapes=_int_map(payload.get("prey_escapes")),
+            pack_scores=_int_map(payload.get("pack_scores")),
+            pack_deaths=_int_map(payload.get("pack_deaths")),
+            last_outcome=payload.get("last_outcome"),
+            last_pack_losses=int(payload.get("last_pack_losses", 0)),
         )
 
-    def note(self, events: list[str], name_to_brain: dict[str, str]) -> None:
+    def note(
+        self,
+        events: list[str],
+        name_to_brain: dict[str, str],
+        *,
+        mode: str = MODE_FFA,
+        prey_name: str | None = None,
+        pack_names: list[str] | None = None,
+        pack_dead: list[str] | None = None,
+    ) -> None:
         self.episodes += 1
         self.last_winner = None
+        self.last_outcome = None
+        self.last_pack_losses = 0
         for event in events:
             if event.endswith("_kill"):
                 name = event[: -len("_kill")]
@@ -73,15 +117,52 @@ class Scoreboard:
                 name = event[: -len("_wall")]
                 bid = name_to_brain.get(name, name)
                 self.walls[bid] = self.walls.get(bid, 0) + 1
-            elif event.startswith("win_"):
+            elif event.startswith("win_") and mode != MODE_HUNT:
                 name = event[len("win_") :]
                 bid = name_to_brain.get(name, name)
                 self.wins[bid] = self.wins.get(bid, 0) + 1
                 self.last_winner = bid
             elif event == "midair":
                 self.midairs += 1
-        if "draw" in events and not any(e.startswith("win_") for e in events):
-            self.draws += 1
+        if mode != MODE_HUNT:
+            if "draw" in events and not any(e.startswith("win_") for e in events):
+                self.draws += 1
+            return
+        prey_name = prey_name or "p1"
+        pack_names = list(pack_names or [])
+        pack_dead = list(pack_dead or [])
+        prey_bid = name_to_brain.get(prey_name, prey_name)
+        self.last_pack_losses = len(pack_dead)
+        self.pack_losses += self.last_pack_losses
+        self.prey_kills[prey_bid] = self.prey_kills.get(prey_bid, 0) + sum(1 for event in events if event == f"{prey_name}_kill")
+        for name in pack_dead:
+            bid = name_to_brain.get(name, name)
+            self.pack_deaths[bid] = self.pack_deaths.get(bid, 0) + 1
+        if "escape" in events:
+            self.escapes += 1
+            self.last_outcome = "escape"
+            self.last_winner = prey_bid
+            self.prey_escapes[prey_bid] = self.prey_escapes.get(prey_bid, 0) + 1
+        elif "pack_wipe" in events:
+            self.pack_wipes += 1
+            self.last_outcome = "wipe"
+            self.last_winner = prey_bid
+            self.prey_escapes[prey_bid] = self.prey_escapes.get(prey_bid, 0) + 1
+        elif "prey_down" in events:
+            self.hunts += 1
+            if "clean_hunt" in events:
+                self.clean_hunts += 1
+                self.last_outcome = "clean_hunt"
+            elif any(event.endswith("_wall") and event.startswith(prey_name) for event in events):
+                self.last_outcome = "prey_crash"
+            elif "midair" in events:
+                self.last_outcome = "midair"
+            else:
+                self.last_outcome = "hunt"
+            for name in pack_names:
+                if name not in pack_dead:
+                    bid = name_to_brain.get(name, name)
+                    self.pack_scores[bid] = self.pack_scores.get(bid, 0) + 1
 
     def copy_brain_stats(self, src: str, dst: str) -> None:
         if not src or not dst or src == dst:
@@ -89,6 +170,10 @@ class Scoreboard:
         self.kills[dst] = int(self.kills.get(src, 0))
         self.walls[dst] = int(self.walls.get(src, 0))
         self.wins[dst] = int(self.wins.get(src, 0))
+        self.prey_kills[dst] = int(self.prey_kills.get(src, 0))
+        self.prey_escapes[dst] = int(self.prey_escapes.get(src, 0))
+        self.pack_scores[dst] = int(self.pack_scores.get(src, 0))
+        self.pack_deaths[dst] = int(self.pack_deaths.get(src, 0))
         if self.last_winner == src:
             self.last_winner = dst
 
@@ -125,8 +210,9 @@ class Academy:
     rng: np.random.Generator
     data_dir: Path | None = None
     brains: dict[str, BrainSlot] = field(init=False)
-    score: Scoreboard = field(default_factory=Scoreboard)
-    curve: list[dict] = field(default_factory=list)
+    mode: str = MODE_FFA
+    scores: dict[str, Scoreboard] = field(default_factory=dict)
+    curves: dict[str, list] = field(default_factory=dict)
     empty: bool = True
     max_steps: int = MAX_STEPS
     n_planes: int = MIN_PLANES
@@ -137,10 +223,29 @@ class Academy:
         if self.data_dir is not None:
             self.data_dir = Path(self.data_dir)
             self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.mode = clamp_mode(self.mode)
+        self.scores = {MODE_FFA: Scoreboard(), MODE_HUNT: Scoreboard()}
+        self.curves = {MODE_FFA: [], MODE_HUNT: []}
         self.brains = {}
         self._ensure_seat_brains(self.n_planes)
         self.lineup = default_lineup(self.n_planes)
         self.restore()
+
+    @property
+    def score(self) -> Scoreboard:
+        return self.scores.setdefault(self.mode, Scoreboard())
+
+    @score.setter
+    def score(self, value: Scoreboard) -> None:
+        self.scores[self.mode] = value
+
+    @property
+    def curve(self) -> list:
+        return self.curves.setdefault(self.mode, [])
+
+    @curve.setter
+    def curve(self, value: list) -> None:
+        self.curves[self.mode] = list(value)
 
     @property
     def red(self) -> Policy:
@@ -259,8 +364,27 @@ class Academy:
             self._detach_stored_seats()
             self._prune_ephemeral()
             if academy_path.is_file():
-                self.score = Scoreboard.from_dict(payload.get("score") or {})
-                self.curve = list(payload.get("curve") or [])[-CURVE_KEEP:]
+                self.mode = clamp_mode(payload.get("mode"))
+                stored_scores = payload.get("scores")
+                if isinstance(stored_scores, dict) and stored_scores:
+                    self.scores = {
+                        MODE_FFA: Scoreboard.from_dict(stored_scores.get(MODE_FFA) or {}),
+                        MODE_HUNT: Scoreboard.from_dict(stored_scores.get(MODE_HUNT) or {}),
+                    }
+                    if self.mode in stored_scores:
+                        self.scores[self.mode] = Scoreboard.from_dict(stored_scores.get(self.mode) or {})
+                else:
+                    self.scores[MODE_FFA] = Scoreboard.from_dict(payload.get("score") or {})
+                    self.scores[MODE_HUNT] = Scoreboard()
+                stored_curves = payload.get("curves")
+                if isinstance(stored_curves, dict) and stored_curves:
+                    self.curves = {
+                        MODE_FFA: list(stored_curves.get(MODE_FFA) or [])[-CURVE_KEEP:],
+                        MODE_HUNT: list(stored_curves.get(MODE_HUNT) or [])[-CURVE_KEEP:],
+                    }
+                else:
+                    self.curves[MODE_FFA] = list(payload.get("curve") or [])[-CURVE_KEEP:]
+                    self.curves[MODE_HUNT] = []
                 self.empty = bool(payload.get("empty", self.score.episodes == 0))
             else:
                 self.empty = False
@@ -280,8 +404,11 @@ class Academy:
         tmp.write_text(
             json.dumps(
                 {
+                    "mode": self.mode,
                     "score": self.score.as_dict(),
                     "curve": _jsonable(self.curve[-CURVE_KEEP:]),
+                    "scores": {key: board.as_dict() for key, board in self.scores.items()},
+                    "curves": {key: _jsonable(rows[-CURVE_KEEP:]) for key, rows in self.curves.items()},
                     "empty": self.empty,
                     "max_steps": self.max_steps,
                     "n_planes": self.n_planes,
@@ -298,26 +425,37 @@ class Academy:
                 slot.learn = False
                 continue
             slot.policy.reset()
-        self.score = Scoreboard()
-        self.curve = []
+        self._clear_mode_stats()
         self.empty = True
         if persist:
             self.persist()
 
     def reset_stats(self, persist: bool = True) -> None:
         self.stats_gen += 1
-        self.score = Scoreboard()
-        self.curve = []
+        self._clear_mode_stats()
         if persist:
             self.persist()
 
+    def _clear_mode_stats(self) -> None:
+        self.scores = {MODE_FFA: Scoreboard(), MODE_HUNT: Scoreboard()}
+        self.curves = {MODE_FFA: [], MODE_HUNT: []}
+
     def reset_flight_setup(self, persist: bool = False) -> None:
         self.brains = {}
+        self.mode = MODE_FFA
         self.n_planes = MIN_PLANES
         self._ensure_seat_brains(self.n_planes)
         self.lineup = default_lineup(self.n_planes)
         if persist:
             self.persist()
+
+    def set_mode(self, mode: str, persist: bool = True) -> str:
+        self.mode = clamp_mode(mode)
+        self.scores.setdefault(self.mode, Scoreboard())
+        self.curves.setdefault(self.mode, [])
+        if persist:
+            self.persist()
+        return self.mode
 
     def set_max_steps(self, steps: int, persist: bool = True) -> int:
         self.max_steps = clamp_max_steps(steps)
@@ -437,7 +575,7 @@ class Academy:
         child = self._make_brain(brain_id, label, True, parent.id, lineage, revision)
         child.policy.copy_from(parent.policy)
         self.brains[brain_id] = child
-        self.score.copy_brain_stats(parent.id, child.id)
+        self._copy_brain_stats(parent.id, child.id)
         parent.learn = False
         parent.stored = True
         if assign_seat is not None and 0 <= assign_seat < len(self.lineup):
@@ -492,8 +630,12 @@ class Academy:
         child.policy.copy_from(source.policy)
         child.stored = False
         self.brains[child.id] = child
-        self.score.copy_brain_stats(source.id, child.id)
+        self._copy_brain_stats(source.id, child.id)
         return child
+
+    def _copy_brain_stats(self, src: str, dst: str) -> None:
+        for board in self.scores.values():
+            board.copy_brain_stats(src, dst)
 
     def _flyable_id(self, brain_id: str, learn: bool = True) -> str:
         slot = self.brains.get(brain_id)
@@ -559,12 +701,22 @@ class Academy:
             wins = int(self.score.wins.get(slot.id, 0))
             kills = int(self.score.kills.get(slot.id, 0))
             walls = int(self.score.walls.get(slot.id, 0))
+            prey_kills = int(self.score.prey_kills.get(slot.id, 0))
+            prey_escapes = int(self.score.prey_escapes.get(slot.id, 0))
+            pack_scores = int(self.score.pack_scores.get(slot.id, 0))
+            pack_deaths = int(self.score.pack_deaths.get(slot.id, 0))
             info["wins"] = wins
             info["kills"] = kills
             info["walls"] = walls
+            info["prey_kills"] = prey_kills
+            info["prey_escapes"] = prey_escapes
+            info["pack_scores"] = pack_scores
+            info["pack_deaths"] = pack_deaths
             info["win_rate"] = (wins / episodes) if episodes else 0.0
             info["kill_rate"] = (kills / episodes) if episodes else 0.0
             info["wall_rate"] = (walls / episodes) if episodes else 0.0
+            info["escape_rate"] = (prey_escapes / episodes) if episodes else 0.0
+            info["hunt_rate"] = (pack_scores / episodes) if episodes else 0.0
             rows.append(info)
         rows.sort(key=lambda row: (row.get("lineage") or row["id"], row.get("revision") or 0, row["id"]))
         return rows
@@ -598,6 +750,11 @@ class Academy:
             "wall_rate": {bid: rate(count) for bid, count in score.walls.items()},
             "midair_rate": rate(score.midairs),
             "draw_rate": rate(score.draws),
+            "escape_rate": rate(score.escapes),
+            "hunt_rate": rate(score.hunts),
+            "clean_hunt_rate": rate(score.clean_hunts),
+            "wipe_rate": rate(score.pack_wipes),
+            "pack_loss_rate": (score.pack_losses / n) if n else 0.0,
             "life": {
                 "mean": mean_of(curve, lambda row: row["steps"]),
                 "recent": mean_of(tail, lambda row: row["steps"]),
@@ -617,7 +774,7 @@ class Academy:
 
     def play(self, learn: bool = True, lr: float = 0.012, record: bool = True, persist: bool = True) -> dict:
         epoch = self.stats_gen
-        world = World(self.rng, max_steps=self.max_steps, lineup=self.lineup)
+        world = World(self.rng, max_steps=self.max_steps, lineup=self.lineup, mode=self.mode)
         rolls: dict[str, list[tuple[np.ndarray, int, float]]] = {p.name: [] for p in world.planes}
         last_obs: dict[str, np.ndarray] = {}
         frames = []
@@ -649,7 +806,15 @@ class Academy:
             if plane.name in last_obs:
                 last_by_brain[bid] = last_obs[plane.name]
         if record and epoch == self.stats_gen:
-            self.score.note(world.events, name_to_brain)
+            prey = world.prey()
+            self.score.note(
+                world.events,
+                name_to_brain,
+                mode=self.mode,
+                prey_name=prey.name if prey else None,
+                pack_names=[p.name for p in world.pack()],
+                pack_dead=[p.name for p in world.pack() if not p.alive],
+            )
 
         probe_fallback = next(iter(last_obs.values()), world.observe(world.planes[0].name))
         brain_stats: dict[str, dict] = {}
@@ -671,6 +836,9 @@ class Academy:
             "blue": brain_stats.get(p2) or _watch_stats(self.blue, [], probe_fallback),
             "brains": brain_stats,
             "winner": self.score.last_winner,
+            "outcome": self.score.last_outcome,
+            "mode": self.mode,
+            "pack_losses": self.score.last_pack_losses,
             "score": self.score.as_dict(),
         }
         if learn:
@@ -695,7 +863,7 @@ class Academy:
             "watch": watch,
             "score": self.score.as_dict(),
             "empty": self.empty,
-            "lesson": _narrate(rows, self.score, self.brains),
+            "lesson": _narrate(rows, self.score, self.brains, self.mode),
         }
 
 
@@ -727,7 +895,7 @@ def _brain_divergence(red: Policy, blue: Policy) -> dict[str, float]:
     }
 
 
-def _narrate(rows: list[dict], score: Scoreboard, brains: dict[str, BrainSlot]) -> str:
+def _narrate(rows: list[dict], score: Scoreboard, brains: dict[str, BrainSlot], mode: str = MODE_FFA) -> str:
     if not rows:
         return "No sorties yet."
     first = rows[: max(1, len(rows) // 5)]
@@ -736,6 +904,15 @@ def _narrate(rows: list[dict], score: Scoreboard, brains: dict[str, BrainSlot]) 
     crash1 = np.mean([any("wall" in e or e == "midair" for e in r["events"]) for r in last])
     life0 = np.mean([r["steps"] for r in first])
     life1 = np.mean([r["steps"] for r in last])
+    if mode == MODE_HUNT:
+        lost0 = np.mean([r.get("pack_losses") or 0 for r in first])
+        lost1 = np.mean([r.get("pack_losses") or 0 for r in last])
+        return (
+            f"{len(rows)} one-against-the-pack sorties. Mean life {life0:.0f} → {life1:.0f} steps. "
+            f"Pack losses per fight {lost0:.2f} → {lost1:.2f}. "
+            f"Escapes {score.escapes}, hunts {score.hunts} ({score.clean_hunts} clean), "
+            f"wipes {score.pack_wipes}. Crash fraction {crash0:.0%} → {crash1:.0%}."
+        )
     top = max(score.wins, key=score.wins.get) if score.wins else None
     champ = brains[top].label if top in brains else (top or "nobody")
     return (
