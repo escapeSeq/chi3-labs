@@ -9,8 +9,12 @@ from typing import Any
 
 import numpy as np
 
-from .agents import ACTION_NAMES, Policy
-from .physics import MAX_STEPS, World, clamp_max_steps
+if __package__:
+    from .agents import ACTION_NAMES, Policy
+    from .physics import MAX_STEPS, World, clamp_max_steps
+else:
+    from agents import ACTION_NAMES, Policy
+    from physics import MAX_STEPS, World, clamp_max_steps
 
 CURVE_KEEP = 200
 SAVE_EVERY = 50

@@ -49,9 +49,16 @@ brains. Reset statistics to zero the scoreboard and learning chart without
 touching those weights. Wipe both brains to scramble the weights and rewrite
 those files.
 
-On Railway, do not put `VOLUME` in the Dockerfile. Attach a **Railway
-Volume** to the service with mount path `/data` (Settings → Volumes).
-The lab also honors `RAILWAY_VOLUME_MOUNT_PATH` if you mount elsewhere.
+On Railway:
+
+- Set the service **Root Directory** to `apps/dogfight-ai-lab` (the folder
+  with `Dockerfile` and `requirements.txt`, not the inner `app/` package).
+- Leave the start command empty so the Dockerfile/`Procfile` can run
+  uvicorn on `$PORT`.
+- Do not put `VOLUME` in the Dockerfile. Attach a **Railway Volume** with
+  mount path `/data` — never `/app` or `/lab`, or the volume will hide the
+  installed code and you will see `ModuleNotFoundError: numpy`.
+- The lab also honors `RAILWAY_VOLUME_MOUNT_PATH` if you mount elsewhere.
 
 The scoreboard tracks kills and wall exits. Training progress is the
 learning chart (life and return). Each brain has a **Graph** tab (the

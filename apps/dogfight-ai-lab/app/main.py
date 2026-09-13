@@ -11,9 +11,14 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import physics
-from .agents import ACTION_NAMES
-from .trainer import Academy
+if __package__:
+    from . import physics
+    from .agents import ACTION_NAMES
+    from .trainer import Academy
+else:
+    import physics
+    from agents import ACTION_NAMES
+    from trainer import Academy
 
 STATIC = Path(__file__).parent / "static"
 DATA_DIR = Path(
@@ -129,3 +134,9 @@ def index() -> FileResponse:
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8082")))
