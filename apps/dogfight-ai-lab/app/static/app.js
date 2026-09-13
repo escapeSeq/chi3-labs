@@ -120,15 +120,23 @@ function ratePct(value) {
 }
 
 function brainOptions(select, selectedId) {
-  rosterList().forEach((brain) => {
-    const opt = document.createElement("option");
-    opt.value = brain.id;
-    const place = brain.stored ? " · library" : "";
-    const rev = brain.revision ? ` r${brain.revision}` : "";
-    const frozen = brain.learn === false ? " · frozen" : "";
-    opt.textContent = `${brain.label}${rev}${frozen}${place}`;
-    select.append(opt);
-  });
+  const hangar = rosterList().filter((brain) => !brain.stored && (brain.assigned || brain.id === selectedId));
+  const lib = rosterList().filter((brain) => brain.stored);
+  const fill = (brains, groupLabel) => {
+    if (!brains.length) return;
+    const group = document.createElement("optgroup");
+    group.label = groupLabel;
+    brains.forEach((brain) => {
+      const opt = document.createElement("option");
+      opt.value = brain.id;
+      const rev = brain.revision ? ` r${brain.revision}` : "";
+      opt.textContent = `${brain.label}${rev}`;
+      group.append(opt);
+    });
+    select.append(group);
+  };
+  fill(hangar, "In the fight");
+  fill(lib, "Library snapshots");
   select.value = selectedId;
 }
 
@@ -331,7 +339,11 @@ function renderHangar() {
     name.addEventListener("change", () => pushRoster());
     const select = document.createElement("select");
     brainOptions(select, row.brain_id);
-    select.addEventListener("change", () => pushRoster());
+    select.addEventListener("change", () => {
+      const chosen = brainById(select.value);
+      if (chosen) name.value = chosen.label || chosen.id;
+      pushRoster();
+    });
     nameCell.className = "brain-pick";
     nameCell.append(name, select);
     const learnCell = document.createElement("td");
@@ -489,7 +501,9 @@ function renderRoster() {
 function renderChips() {
   const host = $("brain-chips");
   host.replaceChildren();
-  rosterList().forEach((brain) => {
+  rosterList()
+    .filter((brain) => brain.stored || brain.assigned)
+    .forEach((brain) => {
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = `chip${state.inspectId === brain.id ? " is-on" : ""}`;
@@ -520,7 +534,8 @@ function readRosterForm() {
       const brain_id = row.querySelector("select")?.value;
       const learn = row.querySelector("input[type=checkbox]")?.checked !== false;
       const label = row.querySelector("input[type=text]")?.value;
-      if (brain_id) {
+      const selected = brainById(brain_id);
+      if (brain_id && selected?.stored !== true) {
         byId[brain_id] = { id: brain_id, label: label || byId[brain_id]?.label || brain_id, learn };
       }
       return { brain_id, learn };
@@ -540,7 +555,7 @@ async function pushRoster() {
     if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Roster update failed");
     state.rosterDirty = false;
     applyStatus(body);
-    $("status").textContent = "Hangar saved. A mixed learn on a shared brain forks a library revision.";
+    $("status").textContent = "Hangar saved. A library pick copies onto the plane; the snapshot stays put.";
   } catch (err) {
     state.rosterDirty = false;
     $("status").textContent = err.message;

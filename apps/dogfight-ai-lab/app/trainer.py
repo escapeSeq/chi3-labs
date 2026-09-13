@@ -341,15 +341,25 @@ class Academy:
 
     def set_roster(self, brains: list[dict], lineup: list[dict] | None = None, persist: bool = True) -> None:
         by_id = {slot.id: slot for slot in self.brains.values()}
+        selected: set[str] = set()
+        if lineup is not None:
+            for item in lineup:
+                if not isinstance(item, dict):
+                    continue
+                picked = _brain_id(item.get("brain_id"))
+                if picked:
+                    selected.add(picked)
         for meta in brains:
             brain_id = _brain_id(meta.get("id"))
             if brain_id is None or brain_id not in by_id:
                 continue
             slot = by_id[brain_id]
-            slot.label = _label(meta.get("label"), slot.label)
             if slot.stored:
+                if brain_id not in selected:
+                    slot.label = _label(meta.get("label"), slot.label)
                 slot.learn = False
                 continue
+            slot.label = _label(meta.get("label"), slot.label)
             want_learn = bool(meta.get("learn", slot.learn))
             slot.learn = want_learn
         if lineup is not None:
@@ -367,7 +377,7 @@ class Academy:
             item = raw[i] if i < len(raw) and isinstance(raw[i], dict) else {}
             brain_id = _brain_id(item.get("brain_id")) or plane_id(i)
             if brain_id not in self.brains:
-                self.brains[brain_id] = self._make_brain(brain_id, brain_id.upper(), True)
+                brain_id = self._fresh_seat_brain(i).id
             pending.append({"brain_id": brain_id, "learn": item.get("learn")})
         for item in pending:
             if self.brains[item["brain_id"]].stored:
@@ -380,7 +390,7 @@ class Academy:
             slot = self.brains[brain_id]
             others = [other for j, other in enumerate(pending) if j != i and other["brain_id"] == brain_id]
             if want is True and others and (any(other["learn"] is False for other in others) or slot.learn is False):
-                child = self.revise_brain(brain_id, persist=False)
+                child = self._checkout_brain(brain_id, learn=True)
                 pending[i]["brain_id"] = child.id
                 seats.append({"brain_id": child.id})
             else:
@@ -462,7 +472,7 @@ class Academy:
             raise ValueError(f"at most {MAX_BRAINS} brains")
         lineage = source.lineage or source.id
         child = self._make_brain(
-            self._next_brain_id(prefix=f"{lineage}-w"),
+            self._next_brain_id(prefix="w"),
             source.label,
             bool(learn),
             source.id,

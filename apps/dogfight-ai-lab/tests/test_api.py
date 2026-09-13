@@ -237,6 +237,37 @@ def test_library_snapshot_does_not_change_when_flown():
     assert ACADEMY.brains[flyer_id].policy.updates > 0
 
 
+def test_hangar_pick_does_not_clobber_library_entries():
+    client.post(
+        "/api/roster",
+        json={
+            "brains": [{"id": "p1", "label": "Snap", "learn": True}, {"id": "p2", "label": "Other", "learn": True}],
+            "lineup": [{"brain_id": "p1"}, {"brain_id": "p2"}],
+        },
+    )
+    client.post("/api/brains/p1/revise", json={"seat": 0})
+    snap = ACADEMY.brains["p1"].policy.W2.copy()
+    before = [row["id"] for row in client.get("/api/state").json()["library"]]
+    assert "p1" in before
+    child = ACADEMY.lineup[0]["brain_id"]
+    hijack = client.post(
+        "/api/roster",
+        json={
+            "brains": [
+                {"id": "p1", "label": "P1 hijack", "learn": True},
+                {"id": child, "label": "P1 hijack", "learn": True},
+                {"id": "p2", "label": "Other", "learn": True},
+            ],
+            "lineup": [{"brain_id": "p1", "learn": True}, {"brain_id": "p2", "learn": True}],
+        },
+    ).json()
+    assert hijack["brains"]["p1"]["label"] == "Snap"
+    assert hijack["brains"]["p1"]["stored"] is True
+    assert {row["id"] for row in hijack["library"]} == set(before)
+    assert hijack["lineup"][0]["brain_id"] != "p1"
+    assert np.allclose(ACADEMY.brains["p1"].policy.W2, snap)
+
+
 def test_roster_share_revise_and_delete():
     empty = client.get("/api/state").json()
     assert empty["brains"]["p1"]["label"] == "P1"
@@ -266,9 +297,11 @@ def test_roster_share_revise_and_delete():
     assert ids[0] != ids[1]
     child = shared["brains"][ids[1]]
     assert child["parent_id"] == "p1"
-    assert child["revision"] >= 1
+    assert child["stored"] is False
     assert child["learn"] is True
     assert shared["brains"]["p1"]["learn"] is False
+    assert shared["brains"]["p1"]["stored"] is False
+    assert shared["library"] == []
     revised = client.post("/api/brains/p1/revise", json={}).json()
     extra = next(row for row in revised["roster"] if row["parent_id"] == "p1" and row["id"] not in ids)
     gone = client.delete(f"/api/brains/{extra['id']}").json()
