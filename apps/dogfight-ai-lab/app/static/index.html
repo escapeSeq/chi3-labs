@@ -8,7 +8,7 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%230c1418' width='64' height='64'/%3E%3Cpath d='M12 40 L32 16 L52 40 L32 32 Z' fill='%23e85d4c'/%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=ffa-lib-keep" />
+    <link rel="stylesheet" href="/static/styles.css?v=ffa-lib-static" />
   </head>
   <body>
     <header class="mast">
@@ -114,7 +114,7 @@
       <article class="library">
         <header>
           <h2>Brain library</h2>
-          <p class="hint">Revisions stay here until you delete them. Flying one from the hangar does not take it out of the library. Swapping a working copy does not add it here.</p>
+          <p class="hint">Frozen snapshots. Flying one copies it onto a plane; training that copy cannot change the library. Delete is the only way to remove a revision.</p>
         </header>
         <div class="table-scroll" id="roster"></div>
       </article>
@@ -181,8 +181,8 @@
         <p>
           Freeze a flying net with <em>revise</em>. The frozen parent lands in
           the library; the seat keeps a learning copy. Pick a library brain in
-          the hangar to fly an older revision again. That does not remove it
-          from the library — only delete does. Swapping a seat without
+          the hangar copies it onto the plane. The library snapshot stays
+          frozen. Only delete removes a revision. Swapping a seat without
           revising throws the old working copy away.
         </p>
       </article>
@@ -196,6 +196,6 @@
         this academy on port 8082
       </p>
     </footer>
-    <script src="/static/app.js?v=ffa-lib-keep" type="module"></script>
+    <script src="/static/app.js?v=ffa-lib-static" type="module"></script>
   </body>
 </html>

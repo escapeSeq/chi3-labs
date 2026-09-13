@@ -86,7 +86,11 @@ def test_roster_round_trips_on_data_dir(tmp_path):
     assert second.brains["p2"].label == "Rookie"
     assert child.id in second.brains
     assert second.brains[child.id].parent_id == "p1"
-    assert second.lineup[0]["brain_id"] == child.id
+    flyer = second.lineup[0]["brain_id"]
+    assert flyer != child.id
+    assert second.brains[flyer].parent_id == child.id
+    assert second.brains[child.id].stored is True
+    assert second.lineup[0]["brain_id"] != "p1"
 
 
 def test_frozen_brain_does_not_learn():
@@ -117,10 +121,16 @@ def test_revision_copies_weights_and_freezes_parent():
         [{"brain_id": "p1"}, {"brain_id": academy.lineup[1]["brain_id"]}],
         persist=False,
     )
-    assert "p1" in academy.brains
+    flyer_id = academy.lineup[0]["brain_id"]
+    assert flyer_id != "p1"
     assert child.id not in academy.brains
     assert academy.brains["p1"].stored is True
-    assert any(row["id"] == "p1" and row["in_library"] for row in academy.roster_report())
+    assert academy.brains["p1"].learn is False
+    assert np.allclose(academy.brains["p1"].policy.W2, parent)
+    assert academy.brains[flyer_id].parent_id == "p1"
+    academy.play(learn=True, persist=False)
+    assert np.allclose(academy.brains["p1"].policy.W2, parent)
+    assert academy.brains[flyer_id].policy.updates >= 1
 
 
 def test_reset_stats_keeps_stored_brains(tmp_path):

@@ -247,6 +247,7 @@ class Academy:
                     self.brains[brain_id].stored = bool(meta.get("stored"))
                 else:
                     self.brains[brain_id].stored = brain_id not in assigned
+            self._detach_stored_seats()
             self._prune_ephemeral()
             if academy_path.is_file():
                 self.score = Scoreboard.from_dict(payload.get("score") or {})
@@ -284,6 +285,9 @@ class Academy:
 
     def reset_models(self, persist: bool = True) -> None:
         for slot in self.brains.values():
+            if slot.stored:
+                slot.learn = False
+                continue
             slot.policy.reset()
         self.score = Scoreboard()
         self.curve = []
@@ -343,6 +347,9 @@ class Academy:
                 continue
             slot = by_id[brain_id]
             slot.label = _label(meta.get("label"), slot.label)
+            if slot.stored:
+                slot.learn = False
+                continue
             want_learn = bool(meta.get("learn", slot.learn))
             slot.learn = want_learn
         if lineup is not None:
@@ -362,6 +369,10 @@ class Academy:
             if brain_id not in self.brains:
                 self.brains[brain_id] = self._make_brain(brain_id, brain_id.upper(), True)
             pending.append({"brain_id": brain_id, "learn": item.get("learn")})
+        for item in pending:
+            if self.brains[item["brain_id"]].stored:
+                clone = self._checkout_brain(item["brain_id"], learn=item["learn"] is True)
+                item["brain_id"] = clone.id
         seats: list[dict[str, str]] = []
         for i, item in enumerate(pending):
             brain_id = item["brain_id"]
@@ -378,7 +389,7 @@ class Academy:
                 elif want is False:
                     slot.learn = False
                 seats.append({"brain_id": brain_id})
-        return seats
+        return [{"brain_id": self._flyable_id(item["brain_id"], learn=False)} for item in seats]
 
     def add_brain(self, label: str = "New brain", learn: bool = True, persist: bool = True) -> BrainSlot:
         if len(self.brains) >= MAX_BRAINS:
@@ -412,8 +423,10 @@ class Academy:
         if assign_seat is not None and 0 <= assign_seat < len(self.lineup):
             self.lineup[assign_seat]["brain_id"] = child.id
         if persist:
+            self._detach_stored_seats()
             if child.id not in {item["brain_id"] for item in self.lineup}:
                 child.stored = True
+                child.learn = False
             self._prune_ephemeral()
             self.persist()
         return child
@@ -438,9 +451,46 @@ class Academy:
         if brain_id not in self.brains:
             raise KeyError(brain_id)
         self.brains[brain_id].policy.reset()
-        self.empty = all(slot.policy.updates == 0 for slot in self.brains.values())
+        self.empty = all(slot.policy.updates == 0 for slot in self.brains.values() if not slot.stored)
         if persist:
             self.persist()
+
+    def _checkout_brain(self, source_id: str, learn: bool = True) -> BrainSlot:
+        source_id = _brain_id(source_id) or source_id
+        source = self.brains[source_id]
+        if len(self.brains) >= MAX_BRAINS:
+            raise ValueError(f"at most {MAX_BRAINS} brains")
+        lineage = source.lineage or source.id
+        child = self._make_brain(
+            self._next_brain_id(prefix=f"{lineage}-w"),
+            source.label,
+            bool(learn),
+            source.id,
+            lineage,
+            int(source.revision or 0),
+        )
+        child.policy.copy_from(source.policy)
+        child.stored = False
+        self.brains[child.id] = child
+        return child
+
+    def _flyable_id(self, brain_id: str, learn: bool = True) -> str:
+        slot = self.brains.get(brain_id)
+        if slot is None or not slot.stored:
+            return brain_id
+        return self._checkout_brain(brain_id, learn=learn).id
+
+    def _detach_stored_seats(self) -> None:
+        copies: dict[str, str] = {}
+        for item in self.lineup:
+            bid = item["brain_id"]
+            slot = self.brains.get(bid)
+            if slot is None or not slot.stored:
+                continue
+            if bid not in copies:
+                copies[bid] = self._checkout_brain(bid, learn=False).id
+            item["brain_id"] = copies[bid]
+            slot.learn = False
 
     def _assigned_ids(self) -> set[str]:
         return {item["brain_id"] for item in self.lineup}
@@ -585,7 +635,7 @@ class Academy:
         for bid, slot in self.brains.items():
             roll = brain_rolls[bid]
             probe = last_by_brain.get(bid, probe_fallback)
-            if learn and slot.learn:
+            if learn and slot.learn and not slot.stored:
                 brain_stats[bid] = slot.policy.learn(roll, lr=lr)
             else:
                 brain_stats[bid] = _watch_stats(slot.policy, roll, probe)
@@ -603,7 +653,7 @@ class Academy:
             "score": self.score.as_dict(),
         }
         if learn:
-            self.empty = all(slot.policy.updates == 0 for slot in self.brains.values())
+            self.empty = all(slot.policy.updates == 0 for slot in self.brains.values() if not slot.stored)
             if record and epoch == self.stats_gen:
                 self.curve.append(row)
             if persist:

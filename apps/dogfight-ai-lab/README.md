@@ -44,9 +44,9 @@ fast-forward sorties (default 100, up to 1,000,000). Use **Sortie timeout**
 for the draw clock (10–600 s). Use **Planes in the fight** for 2–9 aircraft;
 new seats get a fresh brain. The **Hangar** lists those active nets with
 sortable wins, kills, walls, and updates. The **Brain library** starts
-empty and stores a revision only when you freeze a hangar net. Library
-entries stay until you delete them, even if a plane is flying that net.
-Swapping a plane to another working copy discards that copy.
+entries stay until you delete them. Putting a library brain on a plane
+copies it; the stored snapshot does not change. Swapping a working copy
+discards that copy and does not write into the library.
 
 Policies, revisions, hangar seats, and the scoreboard are stored on
 **`/data`** (`p1.npz`, `p2.npz`, …, `academy.json`). Reset statistics to

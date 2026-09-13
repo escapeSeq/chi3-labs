@@ -441,9 +441,9 @@ function renderRoster() {
       learn.className = "learn-toggle";
       const box = document.createElement("input");
       box.type = "checkbox";
-      box.checked = brain.learn;
-      box.addEventListener("change", () => pushRoster());
-      learn.append(box, document.createTextNode(brain.assigned ? "flying" : brain.learn ? "ready" : "frozen"));
+      box.checked = false;
+      box.disabled = true;
+      learn.append(box, document.createTextNode("frozen"));
       status.append(learn);
       const actions = document.createElement("td");
       actions.className = "brain-actions";

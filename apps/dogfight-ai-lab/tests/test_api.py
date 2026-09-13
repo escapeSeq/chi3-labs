@@ -208,9 +208,33 @@ def test_swap_does_not_put_old_brain_in_library():
     ).json()
     assert child_id not in restored["brains"]
     assert any(row["id"] == "p1" for row in restored["library"])
-    assert restored["lineup"][0]["brain_id"] == "p1"
+    assert restored["lineup"][0]["brain_id"] != "p1"
     assert restored["brains"]["p1"]["stored"] is True
-    assert restored["brains"]["p1"]["assigned"] is True
+    assert restored["brains"]["p1"]["assigned"] is False
+    assert restored["brains"]["p1"]["learn"] is False
+    flyer = restored["brains"][restored["lineup"][0]["brain_id"]]
+    assert flyer["parent_id"] == "p1"
+    assert flyer["stored"] is False
+
+
+def test_library_snapshot_does_not_change_when_flown():
+    client.post("/api/brains/p1/revise", json={"seat": 0})
+    snap = ACADEMY.brains["p1"].policy.W2.copy()
+    updates = ACADEMY.brains["p1"].policy.updates
+    p2 = ACADEMY.lineup[1]["brain_id"]
+    flown = client.post(
+        "/api/roster",
+        json={
+            "brains": [slot.meta() for slot in ACADEMY.brains.values()],
+            "lineup": [{"brain_id": "p1", "learn": True}, {"brain_id": p2, "learn": True}],
+        },
+    ).json()
+    flyer_id = flown["lineup"][0]["brain_id"]
+    assert flyer_id != "p1"
+    client.post("/api/lesson", json={"episodes": 4})
+    assert np.allclose(ACADEMY.brains["p1"].policy.W2, snap)
+    assert ACADEMY.brains["p1"].policy.updates == updates
+    assert ACADEMY.brains[flyer_id].policy.updates > 0
 
 
 def test_roster_share_revise_and_delete():
