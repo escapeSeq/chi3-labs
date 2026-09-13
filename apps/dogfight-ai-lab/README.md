@@ -1,8 +1,8 @@
 # Dogfight AI Lab
 
-Educational simulation of **two empty policies** learning a 2-D gun fight
-by trial and error. Each plane has a hard **turn radius** and can only
-**shoot straight forward**.
+Educational simulation of empty policies learning a 2-D **last-plane-standing**
+gun fight by trial and error. Each plane has a hard **turn radius** and can
+only **shoot straight forward**. Every other living plane is a target.
 
 ## Run with Docker Compose
 
@@ -33,24 +33,22 @@ uvicorn app.main:app --host 0.0.0.0 --port 8082
   speed ÷ turn radius. The dashed circles on the plot are the only legal
   paths.
 - The gun is welded to the nose. Kills are geometry, not turrets.
-- Both softmax policies start as random weights. After each sortie,
-  REINFORCE keeps action sequences that lived longer or scored.
+- Each seat starts with its own softmax net. Share a brain only when you
+  want identical tactics. If one copy should learn and another should stay
+  put, **revise**: the child starts from the parent's weights and keeps
+  training.
+- A sortie ends when one aircraft remains, or the timeout scores a draw.
 
-Flights run continuously in the browser: when a sortie ends the next one
-starts automatically, and each one still updates the two policies. Use
-**Train this burst** to fast-forward a chosen number of sorties (default
-100, up to 1,000,000) before the live loop continues. Use **Sortie timeout**
-to change how long a fight may last before it is scored a draw (2–60
-seconds; default 12 s / 240 steps). Use **Planes in the fight** to fly
-2–9 aircraft. Name brains, assign them to seats, and uncheck **learn** to
-freeze a net. Odd counts give red the extra plane unless you change the
-lineup. Turn radius is half the original, so yaw is twice as fast.
+Flights run continuously in the browser. Use **Train this burst** to
+fast-forward sorties (default 100, up to 1,000,000). Use **Sortie timeout**
+for the draw clock (10–600 s). Use **Planes in the fight** for 2–9 aircraft;
+new seats get a fresh brain. The **Hangar** assigns brains to planes. The
+**Brain library** creates, revises, freezes, wipes, and deletes nets.
 
-Both policies and the scoreboard are stored on **`/data`**
-(`red.npz`, `blue.npz`, `academy.json`) so a container restart keeps the
-brains. Reset statistics to zero the scoreboard and learning chart without
-touching those weights. Wipe both brains to scramble the weights and rewrite
-those files.
+Policies, revisions, hangar seats, and the scoreboard are stored on
+**`/data`** (`p1.npz`, `p2.npz`, …, `academy.json`). Reset statistics to
+zero wins and the learning chart without touching weights. Wipe all brains
+to scramble weights and keep names and seats.
 
 On Railway:
 
@@ -62,12 +60,6 @@ On Railway:
   mount path `/data` — never `/app` or `/lab`, or the volume will hide the
   installed code and you will see `ModuleNotFoundError: numpy`.
 - The lab also honors `RAILWAY_VOLUME_MOUNT_PATH` if you mount elsewhere.
-
-The scoreboard tracks kills and wall exits. Training progress is the
-learning chart (life and return). Each brain has a **Graph** tab (the
-wired net) and a **Numbers** tab (weights, heatmaps, probe mix). Reset
-statistics zeros the scoreboard and chart without touching those
-weights.
 
 ## Tests
 

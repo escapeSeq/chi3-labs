@@ -64,6 +64,14 @@ class Policy:
         self.baseline = 0.0
         self.updates = 0
 
+    def copy_from(self, other: Policy) -> None:
+        self.W1 = np.array(other.W1, dtype=float, copy=True)
+        self.b1 = np.array(other.b1, dtype=float, copy=True)
+        self.W2 = np.array(other.W2, dtype=float, copy=True)
+        self.b2 = np.array(other.b2, dtype=float, copy=True)
+        self.baseline = float(other.baseline)
+        self.updates = int(other.updates)
+
     def save(self, path: Path) -> None:
         path = Path(path)
         tmp = path.parent / f".{path.name}.tmp"

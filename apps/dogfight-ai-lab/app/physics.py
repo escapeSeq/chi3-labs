@@ -1,9 +1,9 @@
-"""2-D gun fight with a hard turn radius and forward-only shots.
+"""2-D free-for-all gun fight with a hard turn radius and forward-only shots.
 
 Each plane is a Dubins-style vehicle: constant speed, yaw rate capped by
 speed / turn_radius. The gun is bolted to the nose — bullets inherit heading
-and never steer. Two to nine planes split into red and blue teams that
-share a brain.
+and never steer. Every other living plane is a target. The sortie ends when
+one plane remains, or the clock runs out.
 """
 
 from __future__ import annotations
@@ -15,8 +15,8 @@ import numpy as np
 ARENA = 1.0
 DT = 0.05
 MAX_STEPS = 240
-MIN_STEPS = 40
-MAX_STEPS_CAP = 1200
+MIN_STEPS = 200
+MAX_STEPS_CAP = 12000
 SPEED = 0.20
 TURN_RADIUS = 0.06
 COLLIDE_R = 0.030
@@ -45,16 +45,13 @@ def clamp_plane_count(n: int) -> int:
     return int(min(MAX_PLANES, max(MIN_PLANES, int(n))))
 
 
-def team_counts(n: int) -> tuple[int, int]:
-    n = clamp_plane_count(n)
-    return (n + 1) // 2, n // 2
+def plane_id(i: int) -> str:
+    return f"p{int(i) + 1}"
 
 
 def default_lineup(n: int) -> list[dict[str, str]]:
-    n_red, n_blue = team_counts(n)
-    return [{"team": "red", "brain_id": "red"} for _ in range(n_red)] + [
-        {"team": "blue", "brain_id": "blue"} for _ in range(n_blue)
-    ]
+    n = clamp_plane_count(n)
+    return [{"brain_id": plane_id(i)} for i in range(n)]
 
 
 def max_yaw_rate() -> float:
@@ -68,7 +65,7 @@ def wrap_angle(a: float) -> float:
 @dataclass
 class Plane:
     name: str
-    team: str
+    seat: int
     x: float
     y: float
     heading: float
@@ -79,8 +76,8 @@ class Plane:
     def pose(self) -> dict:
         return {
             "name": self.name,
-            "team": self.team,
-            "brain_id": self.brain_id or self.team,
+            "seat": self.seat,
+            "brain_id": self.brain_id or self.name,
             "x": self.x,
             "y": self.y,
             "heading": self.heading,
@@ -95,17 +92,10 @@ class Bullet:
     y: float
     heading: float
     owner: str
-    team: str
     age: float = 0.0
 
     def pose(self) -> dict:
-        return {
-            "x": self.x,
-            "y": self.y,
-            "heading": self.heading,
-            "owner": self.owner,
-            "team": self.team,
-        }
+        return {"x": self.x, "y": self.y, "heading": self.heading, "owner": self.owner}
 
 
 @dataclass
@@ -133,45 +123,29 @@ class World:
 
     @property
     def red(self) -> Plane:
-        return self._lead("red")
+        return self.planes[0]
 
     @property
     def blue(self) -> Plane:
-        return self._lead("blue")
+        return self.planes[1] if len(self.planes) > 1 else self.planes[0]
+
+    def living(self) -> list[Plane]:
+        return [p for p in self.planes if p.alive]
 
     def reset(self) -> None:
-        jitter = lambda: float(self.rng.uniform(-0.06, 0.06))
         slots = list(self.lineup or default_lineup(self.n_planes))
-        n_red = sum(1 for slot in slots if slot.get("team") == "red")
-        n_blue = sum(1 for slot in slots if slot.get("team") != "red")
+        n = len(slots)
+        jitter = lambda: float(self.rng.uniform(-0.03, 0.03))
         self.planes = []
-        red_i = 0
-        blue_i = 0
-        classic = n_red == 1 and n_blue == 1
-        for slot in slots:
-            team = "red" if slot.get("team") == "red" else "blue"
-            brain_id = str(slot.get("brain_id") or team)
-            if team == "red":
-                name = "red" if red_i == 0 else f"red{red_i + 1}"
-                if classic:
-                    x, y = 0.22 + jitter(), 0.30 + jitter()
-                else:
-                    frac = (red_i + 1) / (n_red + 1)
-                    x = float(np.clip(0.18 + jitter() * 0.5, 0.08, 0.42))
-                    y = float(np.clip(frac + jitter() * 0.35, 0.08, 0.92))
-                heading = float(self.rng.uniform(0.05, 0.9))
-                red_i += 1
-            else:
-                name = "blue" if blue_i == 0 else f"blue{blue_i + 1}"
-                if classic:
-                    x, y = 0.78 + jitter(), 0.70 + jitter()
-                else:
-                    frac = (blue_i + 1) / (n_blue + 1)
-                    x = float(np.clip(0.82 + jitter() * 0.5, 0.58, 0.92))
-                    y = float(np.clip(frac + jitter() * 0.35, 0.08, 0.92))
-                heading = float(self.rng.uniform(np.pi - 0.2, np.pi + 0.9))
-                blue_i += 1
-            self.planes.append(Plane(name, team, x, y, heading, brain_id=brain_id))
+        for i, slot in enumerate(slots):
+            name = plane_id(i)
+            brain_id = str(slot.get("brain_id") or name)
+            angle = (2.0 * np.pi * i) / n - np.pi / 2
+            radius = 0.32 if n > 2 else 0.28
+            x = float(np.clip(0.5 + radius * np.cos(angle) + jitter(), 0.08, 0.92))
+            y = float(np.clip(0.5 + radius * np.sin(angle) + jitter(), 0.08, 0.92))
+            heading = float(wrap_angle(angle + np.pi + self.rng.uniform(-0.25, 0.25)))
+            self.planes.append(Plane(name, i, x, y, heading, brain_id=brain_id))
         self.bullets = []
         self.t = 0.0
         self.steps = 0
@@ -179,7 +153,7 @@ class World:
 
     def step(self, red_action: int | dict[str, int], blue_action: int = 1) -> dict[str, float]:
         rewards = {p.name: -0.002 for p in self.planes}
-        if self._team_wiped("red") or self._team_wiped("blue"):
+        if self._survivors() <= 1:
             return rewards
         if isinstance(red_action, dict):
             actions = red_action
@@ -196,17 +170,22 @@ class World:
         self._shaping(rewards)
         self.t += DT
         self.steps += 1
-        if self.steps >= self.max_steps and not self._team_wiped("red") and not self._team_wiped("blue"):
+        live = self.living()
+        if len(live) == 1:
+            self.events.append(f"win_{live[0].name}")
+        elif self.steps >= self.max_steps and len(live) > 1:
             self.events.append("draw")
         return rewards
 
     def done(self) -> bool:
-        return self._team_wiped("red") or self._team_wiped("blue") or self.steps >= self.max_steps
+        return self._survivors() <= 1 or self.steps >= self.max_steps
 
     def snapshot(self) -> dict:
+        live = self.living()
         return {
             "t": self.t,
             "n_planes": len(self.planes),
+            "alive": len(live),
             "red": self.red.pose(),
             "blue": self.blue.pose(),
             "planes": [p.pose() for p in self.planes],
@@ -216,7 +195,7 @@ class World:
 
     def observe(self, who: str) -> np.ndarray:
         me = self._plane(who)
-        you = self._nearest_enemy(me) or self._lead("blue" if me.team == "red" else "red")
+        you = self._nearest_other(me) or me
         dx, dy = you.x - me.x, you.y - me.y
         c, s = np.cos(me.heading), np.sin(me.heading)
         fwd = dx * c + dy * s
@@ -249,9 +228,7 @@ class World:
             if plane.cooldown > 1e-9:
                 rewards[plane.name] -= 0.01
             else:
-                self.bullets.append(
-                    Bullet(plane.x, plane.y, plane.heading, plane.name, plane.team)
-                )
+                self.bullets.append(Bullet(plane.x, plane.y, plane.heading, plane.name))
                 plane.cooldown = COOLDOWN
 
     def _integrate_planes(self) -> None:
@@ -276,15 +253,15 @@ class World:
             if p.alive and (p.x <= 0.0 or p.x >= ARENA or p.y <= 0.0 or p.y >= ARENA):
                 p.alive = False
                 rewards[p.name] -= 1.0
-                others = [q for q in self.planes if q.team != p.team and q.alive]
+                others = self.living()
                 if others:
                     bonus = 0.35 / len(others)
                     for q in others:
                         rewards[q.name] += bonus
-                self.events.append(f"{p.team}_wall")
+                self.events.append(f"{p.name}_wall")
 
     def _midair(self, rewards: dict[str, float]) -> None:
-        live = [p for p in self.planes if p.alive]
+        live = self.living()
         crashed: set[str] = set()
         for i, a in enumerate(live):
             for b in live[i + 1 :]:
@@ -304,18 +281,14 @@ class World:
         for b in self.bullets:
             hit = None
             for target in self.planes:
-                if (
-                    target.alive
-                    and target.team != b.team
-                    and np.hypot(b.x - target.x, b.y - target.y) < HIT_R
-                ):
+                if target.alive and target.name != b.owner and np.hypot(b.x - target.x, b.y - target.y) < HIT_R:
                     hit = target
                     break
             if hit is not None:
                 hit.alive = False
                 rewards[b.owner] += 1.0
                 rewards[hit.name] -= 1.0
-                self.events.append(f"{b.team}_kill")
+                self.events.append(f"{b.owner}_kill")
             else:
                 leftover.append(b)
         self.bullets = leftover
@@ -324,7 +297,7 @@ class World:
         for me in self.planes:
             if not me.alive:
                 continue
-            you = self._nearest_enemy(me)
+            you = self._nearest_other(me)
             if you is None:
                 continue
             dx, dy = you.x - me.x, you.y - me.y
@@ -340,25 +313,24 @@ class World:
             if margin < 0.12:
                 rewards[me.name] -= 0.14 * (0.12 - margin) / 0.12
 
-    def _lead(self, team: str) -> Plane:
-        return next(p for p in self.planes if p.team == team)
-
     def _plane(self, who: str) -> Plane:
         for p in self.planes:
             if p.name == who:
                 return p
-        if who in ("red", "blue"):
-            return self._lead(who)
+        if who == "red":
+            return self.red
+        if who == "blue":
+            return self.blue
         raise KeyError(who)
 
-    def _nearest_enemy(self, me: Plane) -> Plane | None:
-        enemies = [p for p in self.planes if p.team != me.team and p.alive]
-        if not enemies:
+    def _nearest_other(self, me: Plane) -> Plane | None:
+        others = [p for p in self.planes if p.name != me.name and p.alive]
+        if not others:
             return None
-        return min(enemies, key=lambda p: float(np.hypot(p.x - me.x, p.y - me.y)))
+        return min(others, key=lambda p: float(np.hypot(p.x - me.x, p.y - me.y)))
 
-    def _team_wiped(self, team: str) -> bool:
-        return not any(p.alive for p in self.planes if p.team == team)
+    def _survivors(self) -> int:
+        return sum(1 for p in self.planes if p.alive)
 
 
 def _ray_to_wall(x: float, y: float, heading: float) -> float:

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dogfight AI Lab — two empty nets learn a turn fight</title>
+    <title>Dogfight AI Lab — last plane standing</title>
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%230c1418' width='64' height='64'/%3E%3Cpath d='M12 40 L32 16 L52 40 L32 32 Z' fill='%23e85d4c'/%3E%3C/svg%3E"
@@ -16,55 +16,51 @@
         <span class="mark">⌖</span>
         <div>
           <p class="eyebrow">Chi3-sim · aerial gunnery academy</p>
-          <h1>Two empty brains, one turn-radius gun fight</h1>
+          <h1>Last plane standing</h1>
         </div>
       </div>
       <p class="lede">
-        Each plane is a Dubins vehicle: it cannot spin in place. Yaw is capped
-        by speed ÷ turn radius, and the gun is welded to the nose. Both
-        policies start as random weights — no tactics. Sorties run
-        continuously: when one fight ends, the next starts on its own, and
-        each one is another trial-and-error update. Name the brains, assign
-        them to seats, and freeze any net you do not want updated. Weights
-        are stored on
-        <code>/data</code> so a restart keeps what they learned.
+        Each plane is a Dubins vehicle: yaw is capped by speed ÷ turn radius,
+        and the gun is welded to the nose. Everyone shoots everyone. A sortie
+        ends when one aircraft remains, or the clock runs out. Each seat starts
+        with its own brain. Share a brain only if you choose to. If one copy
+        learns and another stays frozen, the learner is a <em>revision</em> of
+        the original. Weights live on <code>/data</code>.
       </p>
     </header>
 
-    <section class="score">
-      <div class="pilot red">
-        <h2>Red</h2>
-        <p class="big" id="red-kills">0</p>
-        <p class="sub">kills</p>
-        <p id="red-extra">0 walls</p>
-        <p id="red-brain-line">24 hidden · 0 updates</p>
+    <section class="scoreboard" id="scoreboard">
+      <div class="stat">
+        <p class="sub">Sortie</p>
+        <p class="big" id="episode-read">0</p>
+      </div>
+      <div class="stat">
+        <p class="sub">Last winner</p>
+        <p class="big win" id="winner-read">—</p>
+      </div>
+      <div class="stat">
+        <p class="sub">Draws · midairs</p>
+        <p class="big" id="draw-read">0 · 0</p>
       </div>
       <div class="versus">
-        <p id="episode-read">Sortie 0</p>
-        <p id="matchup-read" class="sub">1v1</p>
-        <p id="empty-badge" class="badge">both models empty</p>
-      </div>
-      <div class="pilot blue">
-        <h2>Blue</h2>
-        <p class="big" id="blue-kills">0</p>
-        <p class="sub">kills</p>
-        <p id="blue-extra">0 walls</p>
-        <p id="blue-brain-line">24 hidden · 0 updates</p>
+        <p id="matchup-read" class="sub">2 planes · FFA</p>
+        <p id="empty-badge" class="badge">brains empty</p>
       </div>
     </section>
+    <div class="win-strip" id="win-strip"></div>
 
     <main>
       <section class="field-col">
         <header>
           <h2>The field</h2>
-          <p class="hint" id="field-hint">A 2-D square. Out of bounds is a crash. Mid-air contact is a crash. Add planes with the slider — red and blue split the flock.</p>
+          <p class="hint" id="field-hint">Free-for-all. Out of bounds is a crash. Last plane left wins.</p>
         </header>
         <canvas id="field" width="720" height="720"></canvas>
-        <p class="caption" id="field-caption">Continuous flights — restarting the next sortie automatically.</p>
+        <p class="caption" id="field-caption">Continuous flights — next sortie starts on its own.</p>
       </section>
 
       <aside class="panel">
-        <h2>Continuous flights</h2>
+        <h2>Flights</h2>
         <button id="pause" class="primary" type="button">Pause flights</button>
         <label>
           Train this many sorties in a burst
@@ -83,129 +79,89 @@
             <input id="planes" type="range" min="2" max="9" step="1" value="2" />
             <span>9</span>
           </div>
-          <p class="hint" id="planes-read">2 planes · 1v1</p>
+          <p class="hint" id="planes-read">2 planes · each seat has its own brain</p>
         </label>
-        <h3>Lineup</h3>
-        <p class="hint">Team is who they shoot. Brain is the net in the seat. Uncheck learn to freeze weights.</p>
-        <div id="lineup"></div>
-        <h3>Named brains</h3>
-        <div id="roster"></div>
-        <button id="add-brain" type="button">Add a brain</button>
         <label>
-          Sortie timeout — draw if both teams are still up
-          <input id="timeout-num" type="number" min="2" max="60" step="1" value="12" />
+          Sortie timeout — draw if more than one is still up
+          <input id="timeout-num" type="number" min="10" max="600" step="1" value="12" />
           <div class="burst-row">
-            <span>2s</span>
-            <input id="timeout" type="range" min="2" max="60" step="1" value="12" />
-            <span>60s</span>
+            <span>10s</span>
+            <input id="timeout" type="range" min="10" max="600" step="1" value="12" />
+            <span>600s</span>
           </div>
           <p class="hint" id="timeout-read">12 s · 240 steps</p>
         </label>
         <button id="lesson" type="button">Train this burst, then keep flying</button>
         <button id="reset-stats" type="button">Reset statistics</button>
         <button id="forget" type="button">Wipe all brains</button>
-        <p class="hint" id="status">Flights loop on their own. Brains live on /data. Empty nets first — expect walls.</p>
+        <p class="hint" id="status">Flights loop on their own. Empty nets first — expect walls.</p>
         <h3>Learning</h3>
         <canvas id="chart" width="420" height="180"></canvas>
         <blockquote id="lesson-note">
-          A kill requires pointing the nose. A crash is usually the wall — the
-          first thing an empty net learns is “don’t fly off the plot.”
+          Survive. Point the nose. A crash is usually the wall.
         </blockquote>
       </aside>
     </main>
 
+    <section class="admin">
+      <article class="hangar">
+        <header>
+          <h2>Hangar</h2>
+          <p class="hint">Each plane needs a brain. Pick the same net to share, or fork a revision if only one seat should learn.</p>
+        </header>
+        <div id="hangar"></div>
+      </article>
+      <article class="library">
+        <header class="lib-head">
+          <div>
+            <h2>Brain library</h2>
+            <p class="hint">Create, revise, rename, freeze, or delete. A revision copies weights from the parent and starts learning.</p>
+          </div>
+          <button id="add-brain" type="button">New brain</button>
+        </header>
+        <div id="roster"></div>
+      </article>
+    </section>
+
     <section class="intel">
       <header class="intel-head">
         <div>
-          <h2>Brains</h2>
-          <p class="hint">Each net is 10 inputs → 24 hidden ReLUs → 6 actions. Graph is the wiring; numbers are the weights. Names and learn toggles are in the side panel.</p>
+          <h2>Inspect</h2>
+          <p class="hint">Each net is 10 inputs → 24 hidden ReLUs → 6 actions. Pick a brain to open its wiring.</p>
         </div>
         <nav class="tabs" aria-label="Brain view">
           <button class="tab is-on" data-brain-tab="graph" type="button">Graph</button>
           <button class="tab" data-brain-tab="numbers" type="button">Numbers</button>
         </nav>
       </header>
-      <div class="brains" id="brains">
-        <article class="brain red" data-brain-id="red">
-          <h2>Red brain</h2>
-          <p class="hint" id="red-arch">10 obs → 24 hidden ReLU → 6 actions</p>
-          <div class="brain-pane is-on" data-pane="graph">
-            <canvas id="red-net" width="640" height="420"></canvas>
-            <p class="caption">Line thickness is |weight|. Output glow is the probe mix.</p>
-            <div class="acts" id="red-acts"></div>
-          </div>
-          <div class="brain-pane" data-pane="numbers">
-            <dl class="meters">
-              <div><dt>Updates</dt><dd id="rb-upd">0</dd></div>
-              <div><dt>Weight L2 / count</dt><dd id="rb-l2">—</dd></div>
-              <div><dt>W1 / W2 RMS (growth)</dt><dd id="rb-rms">—</dd></div>
-              <div><dt>Baseline</dt><dd id="rb-base">—</dd></div>
-              <div><dt>Probe entropy / peak</dt><dd id="rb-ent">—</dd></div>
-              <div><dt>Hidden on / dead</dt><dd id="rb-hid">—</dd></div>
-              <div><dt>Favorite (probe)</dt><dd id="rb-fav">—</dd></div>
-            </dl>
-            <p class="hint" id="red-last">Last sortie mix: —</p>
-            <canvas id="red-w1" width="420" height="168"></canvas>
-            <p class="caption">W1 heatmap: 24 hidden × 10 inputs.</p>
-            <canvas id="red-weights" width="420" height="84"></canvas>
-            <p class="caption">W2 heatmap: 6 actions × 24 hidden.</p>
-          </div>
-        </article>
-        <article class="brain blue" data-brain-id="blue">
-          <h2>Blue brain</h2>
-          <p class="hint" id="blue-arch">10 obs → 24 hidden ReLU → 6 actions</p>
-          <div class="brain-pane is-on" data-pane="graph">
-            <canvas id="blue-net" width="640" height="420"></canvas>
-            <p class="caption">Line thickness is |weight|. Output glow is the probe mix.</p>
-            <div class="acts" id="blue-acts"></div>
-          </div>
-          <div class="brain-pane" data-pane="numbers">
-            <dl class="meters">
-              <div><dt>Updates</dt><dd id="bb-upd">0</dd></div>
-              <div><dt>Weight L2 / count</dt><dd id="bb-l2">—</dd></div>
-              <div><dt>W1 / W2 RMS (growth)</dt><dd id="bb-rms">—</dd></div>
-              <div><dt>Baseline</dt><dd id="bb-base">—</dd></div>
-              <div><dt>Probe entropy / peak</dt><dd id="bb-ent">—</dd></div>
-              <div><dt>Hidden on / dead</dt><dd id="bb-hid">—</dd></div>
-              <div><dt>Favorite (probe)</dt><dd id="bb-fav">—</dd></div>
-            </dl>
-            <p class="hint" id="blue-last">Last sortie mix: —</p>
-            <canvas id="blue-w1" width="420" height="168"></canvas>
-            <p class="caption">W1 heatmap: 24 hidden × 10 inputs.</p>
-            <canvas id="blue-weights" width="420" height="84"></canvas>
-            <p class="caption">W2 heatmap: 6 actions × 24 hidden.</p>
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <template id="brain-card-tpl">
-      <article class="brain extra">
-        <h2>Brain</h2>
-        <p class="hint arch">10 obs → 24 hidden ReLU → 6 actions</p>
+      <div class="chips" id="brain-chips"></div>
+      <article class="brain" id="inspect-card">
+        <h2 id="inspect-title">Brain</h2>
+        <p class="hint" id="inspect-arch">10 obs → 24 hidden ReLU → 6 actions</p>
         <div class="brain-pane is-on" data-pane="graph">
-          <canvas class="net" width="640" height="420"></canvas>
+          <canvas id="inspect-net" width="640" height="420"></canvas>
           <p class="caption">Line thickness is |weight|. Output glow is the probe mix.</p>
-          <div class="acts"></div>
+          <div class="acts" id="inspect-acts"></div>
         </div>
         <div class="brain-pane" data-pane="numbers">
           <dl class="meters">
-            <div><dt>Updates</dt><dd class="upd">0</dd></div>
-            <div><dt>Weight L2 / count</dt><dd class="l2">—</dd></div>
-            <div><dt>W1 / W2 RMS (growth)</dt><dd class="rms">—</dd></div>
-            <div><dt>Baseline</dt><dd class="base">—</dd></div>
-            <div><dt>Probe entropy / peak</dt><dd class="ent">—</dd></div>
-            <div><dt>Hidden on / dead</dt><dd class="hid">—</dd></div>
-            <div><dt>Favorite (probe)</dt><dd class="fav">—</dd></div>
+            <div><dt>Updates</dt><dd id="insp-upd">0</dd></div>
+            <div><dt>Weight L2 / count</dt><dd id="insp-l2">—</dd></div>
+            <div><dt>W1 / W2 RMS (growth)</dt><dd id="insp-rms">—</dd></div>
+            <div><dt>Baseline</dt><dd id="insp-base">—</dd></div>
+            <div><dt>Probe entropy / peak</dt><dd id="insp-ent">—</dd></div>
+            <div><dt>Hidden on / dead</dt><dd id="insp-hid">—</dd></div>
+            <div><dt>Favorite (probe)</dt><dd id="insp-fav">—</dd></div>
+            <div><dt>Revision</dt><dd id="insp-rev">—</dd></div>
           </dl>
-          <p class="hint last">Last sortie mix: —</p>
-          <canvas class="w1" width="420" height="168"></canvas>
+          <p class="hint" id="inspect-last">Last sortie mix: —</p>
+          <canvas id="inspect-w1" width="420" height="168"></canvas>
           <p class="caption">W1 heatmap: 24 hidden × 10 inputs.</p>
-          <canvas class="w2" width="420" height="84"></canvas>
+          <canvas id="inspect-weights" width="420" height="84"></canvas>
           <p class="caption">W2 heatmap: 6 actions × 24 hidden.</p>
         </div>
       </article>
-    </template>
+    </section>
 
     <section class="primer">
       <article>
@@ -217,20 +173,18 @@
         </p>
       </article>
       <article>
-        <h2>Why the gun only fires forward</h2>
+        <h2>Last plane standing</h2>
         <p>
-          Bullets inherit the nose heading and never steer. Getting a kill is
-          geometry: be behind, or cut across the circle, then squeeze. Firing
-          sideways does nothing — the net has to discover that.
+          There are no teams. A kill, a wall, or a mid-air takes you out. The
+          fight continues until one aircraft is left, or timeout scores a draw.
         </p>
       </article>
       <article>
-        <h2>Trial and error</h2>
+        <h2>Revisions</h2>
         <p>
-          After each sortie the policy gets a return: plus for a kill and for
-          pointing the nose, minus for walls and dying. REINFORCE raises the
-          probability of the action sequence that produced a better return.
-          That is all “learning” is here.
+          Freeze a net that already flies, then revise it. The child starts
+          from those weights and keeps learning; the parent stays put. Share a
+          brain across seats only when you want identical tactics.
         </p>
       </article>
     </section>

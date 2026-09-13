@@ -9,7 +9,6 @@ def test_fresh_policy_is_near_uniform():
     obs = np.zeros(10)
     probs = p.forward(obs)["probs"]
     assert abs(float(probs.sum()) - 1.0) < 1e-6
-    # Empty of skill: no action should be nearly certain.
     assert float(probs.max()) < 0.55
 
 
@@ -40,8 +39,8 @@ def test_brains_round_trip_on_data_dir(tmp_path):
     red = first.red.W2.copy()
     blue = first.blue.W2.copy()
     score = first.score.as_dict()
-    assert (tmp_path / "red.npz").is_file()
-    assert (tmp_path / "blue.npz").is_file()
+    assert (tmp_path / "p1.npz").is_file()
+    assert (tmp_path / "p2.npz").is_file()
     assert (tmp_path / "academy.json").is_file()
 
     second = Academy(np.random.default_rng(99), data_dir=tmp_path)
@@ -55,48 +54,59 @@ def test_brains_round_trip_on_data_dir(tmp_path):
 
 def test_timeout_round_trips_on_data_dir(tmp_path):
     first = Academy(np.random.default_rng(2), data_dir=tmp_path)
-    first.set_max_steps(80)
-    assert first.max_steps == 80
+    first.set_max_steps(400)
+    assert first.max_steps == 400
     second = Academy(np.random.default_rng(9), data_dir=tmp_path)
-    assert second.max_steps == 80
+    assert second.max_steps == 400
 
 
 def test_plane_count_round_trips_on_data_dir(tmp_path):
     first = Academy(np.random.default_rng(2), data_dir=tmp_path)
     first.set_n_planes(7)
     assert first.n_planes == 7
+    assert len({slot["brain_id"] for slot in first.lineup}) == 7
     second = Academy(np.random.default_rng(9), data_dir=tmp_path)
     assert second.n_planes == 7
 
 
 def test_roster_round_trips_on_data_dir(tmp_path):
     first = Academy(np.random.default_rng(2), data_dir=tmp_path)
-    first.brains["red"].learn = False
     first.set_roster(
-        [{"id": "red", "label": "Ace", "learn": False}, {"id": "blue", "label": "Rookie", "learn": True}],
-        [{"team": "red", "brain_id": "red"}, {"team": "blue", "brain_id": "blue"}],
+        [{"id": "p1", "label": "Ace", "learn": False}, {"id": "p2", "label": "Rookie", "learn": True}],
+        [{"brain_id": "p1"}, {"brain_id": "p2"}],
     )
-    first.add_brain("Spare", learn=False)
-    extra = next(bid for bid in first.brains if bid not in ("red", "blue"))
+    child = first.revise_brain("p1")
     first.set_roster(
         [slot.meta() for slot in first.brains.values()],
-        [{"team": "red", "brain_id": extra}, {"team": "blue", "brain_id": "blue"}],
+        [{"brain_id": child.id}, {"brain_id": "p2"}],
     )
     second = Academy(np.random.default_rng(9), data_dir=tmp_path)
-    assert second.brains["red"].label == "Ace"
-    assert second.brains["red"].learn is False
-    assert second.brains["blue"].label == "Rookie"
-    assert extra in second.brains
-    assert second.lineup[0]["brain_id"] == extra
+    assert second.brains["p1"].label == "Ace"
+    assert second.brains["p1"].learn is False
+    assert second.brains["p2"].label == "Rookie"
+    assert child.id in second.brains
+    assert second.brains[child.id].parent_id == "p1"
+    assert second.lineup[0]["brain_id"] == child.id
 
 
 def test_frozen_brain_does_not_learn():
     academy = Academy(np.random.default_rng(4))
-    academy.brains["red"].learn = False
+    academy.brains["p1"].learn = False
     before = academy.red.W2.copy()
     academy.play(learn=True, persist=False)
     assert np.allclose(academy.red.W2, before)
     assert academy.blue.updates == 1
+
+
+def test_revision_copies_weights_and_freezes_parent():
+    academy = Academy(np.random.default_rng(6))
+    academy.play(learn=True, persist=False)
+    parent = academy.red.W2.copy()
+    child = academy.revise_brain("p1", assign_seat=0)
+    assert np.allclose(child.policy.W2, parent)
+    assert academy.brains["p1"].learn is False
+    assert child.learn is True
+    assert academy.lineup[0]["brain_id"] == child.id
 
 
 def test_reset_stats_keeps_stored_brains(tmp_path):

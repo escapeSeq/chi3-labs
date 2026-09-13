@@ -29,19 +29,19 @@ DATA_DIR = Path(
 
 app = FastAPI(
     title="Dogfight AI Lab",
-    description="Two empty policies learn a turn-radius gun fight by trial and error.",
-    version="0.1.0",
+    description="Named brains last-plane-standing. Learners are revisions of frozen nets.",
+    version="0.2.0",
 )
 
 
 class LessonIn(BaseModel):
     episodes: int = Field(default=100, ge=4, le=1_000_000)
     lr: float = Field(default=0.018, gt=0.001, le=0.08)
-    seconds: float | None = Field(default=None, ge=2.0, le=60.0)
+    seconds: float | None = Field(default=None, ge=10.0, le=600.0)
 
 
 class TimeoutIn(BaseModel):
-    seconds: float = Field(default=12.0, ge=2.0, le=60.0)
+    seconds: float = Field(default=12.0, ge=10.0, le=600.0)
 
 
 class PlanesIn(BaseModel):
@@ -49,8 +49,8 @@ class PlanesIn(BaseModel):
 
 
 class SlotIn(BaseModel):
-    team: str = Field(pattern="^(red|blue)$")
     brain_id: str = Field(min_length=1, max_length=24)
+    learn: bool | None = None
 
 
 class BrainMetaIn(BaseModel):
@@ -69,18 +69,18 @@ class BrainAddIn(BaseModel):
     learn: bool = True
 
 
+class ReviseIn(BaseModel):
+    seat: int | None = Field(default=None, ge=0, le=8)
+
+
 ACADEMY = Academy(np.random.default_rng(7), data_dir=DATA_DIR)
 
 
 def _status() -> dict:
     paths = ACADEMY.brain_paths() or {}
-    stored = bool(paths) and all(
-        paths[bid].is_file() for bid in ACADEMY.brains if bid in paths
-    )
+    stored = bool(paths) and all(paths[bid].is_file() for bid in ACADEMY.brains if bid in paths)
     roster = ACADEMY.roster_report()
     brains = {row["id"]: row for row in roster}
-    n_red = sum(1 for slot in ACADEMY.lineup if slot["team"] == "red")
-    n_blue = sum(1 for slot in ACADEMY.lineup if slot["team"] == "blue")
     return {
         "empty": ACADEMY.empty,
         "score": ACADEMY.score.as_dict(),
@@ -105,7 +105,6 @@ def _status() -> dict:
             "n_planes": ACADEMY.n_planes,
             "min_planes": physics.MIN_PLANES,
             "max_planes": physics.MAX_PLANES,
-            "teams": {"red": n_red, "blue": n_blue},
         },
     }
 
@@ -162,6 +161,17 @@ def add_brain(body: BrainAddIn) -> dict:
     return _status()
 
 
+@app.post("/api/brains/{brain_id}/revise")
+def revise_brain(brain_id: str, body: ReviseIn | None = None) -> dict:
+    try:
+        ACADEMY.revise_brain(brain_id, assign_seat=None if body is None else body.seat)
+    except KeyError as exc:
+        raise HTTPException(404, f"unknown brain {brain_id}") from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return _status()
+
+
 @app.delete("/api/brains/{brain_id}")
 def remove_brain(brain_id: str) -> dict:
     try:
@@ -192,16 +202,12 @@ def lesson(body: LessonIn) -> dict:
 
 @app.post("/api/watch")
 def watch() -> dict:
-    if ACADEMY.score.episodes == 0:
-        # Still allowed: watch the empty flailing.
-        pass
     duel = ACADEMY.play(learn=False, record=False)
     return {**duel, **_status()}
 
 
 @app.post("/api/sortie")
 def sortie() -> dict:
-    """One training duel (used if the UI wants a slower live lesson)."""
     try:
         result = ACADEMY.play(learn=True)
     except ValueError as exc:
