@@ -8,7 +8,7 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%230c1418' width='64' height='64'/%3E%3Cpath d='M12 40 L32 16 L52 40 L32 32 Z' fill='%23e85d4c'/%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="static/styles.css?v=burst-toggle" />
+    <link rel="stylesheet" href="static/styles.css?v=full-obs" />
   </head>
   <body>
     <header class="mast">
@@ -129,7 +129,7 @@
       <header class="intel-head">
         <div>
           <h2>Inspect</h2>
-          <p class="hint">Each net is 10 inputs → 24 hidden ReLUs → 6 actions. Pick a brain to open its wiring.</p>
+          <p class="hint">Each net sees every other plane and all four arena edges: 49 inputs → 24 hidden ReLUs → 6 actions. Pick a brain to open its wiring.</p>
         </div>
         <nav class="tabs" aria-label="Brain view">
           <button class="tab is-on" data-brain-tab="graph" type="button">Graph</button>
@@ -139,9 +139,9 @@
       <div class="chips" id="brain-chips"></div>
       <article class="brain" id="inspect-card">
         <h2 id="inspect-title">Brain</h2>
-        <p class="hint" id="inspect-arch">10 obs → 24 hidden ReLU → 6 actions</p>
+        <p class="hint" id="inspect-arch">49 obs → 24 hidden ReLU → 6 actions</p>
         <div class="brain-pane is-on" data-pane="graph">
-          <canvas id="inspect-net" width="640" height="420"></canvas>
+          <canvas id="inspect-net" width="720" height="880"></canvas>
           <p class="caption">Line thickness is |weight|. Output glow is the probe mix.</p>
           <div class="acts" id="inspect-acts"></div>
         </div>
@@ -158,7 +158,7 @@
           </dl>
           <p class="hint" id="inspect-last">Last sortie mix: —</p>
           <canvas id="inspect-w1" width="420" height="168"></canvas>
-          <p class="caption">W1 heatmap: 24 hidden × 10 inputs.</p>
+          <p class="caption" id="inspect-w1-cap">W1 heatmap: 24 hidden × 49 inputs.</p>
           <canvas id="inspect-weights" width="420" height="84"></canvas>
           <p class="caption">W2 heatmap: 6 actions × 24 hidden.</p>
         </div>
@@ -206,6 +206,6 @@
     <footer>
       <p>Chi3-labs</p>
     </footer>
-    <script src="static/app.js?v=burst-toggle" type="module"></script>
+    <script src="static/app.js?v=full-obs" type="module"></script>
   </body>
 </html>

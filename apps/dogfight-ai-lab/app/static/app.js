@@ -37,9 +37,14 @@ const field = $("field");
 const fctx = field.getContext("2d");
 
 const ACTION_NAMES = ["left", "straight", "right", "left+fire", "straight+fire", "right+fire"];
-const OBS_NAMES = ["fwd", "right", "range", "rel h", "x", "y", "cos", "sin", "wall", "gun"];
 const PLANES_MIN = 2;
 const PLANES_MAX = 9;
+function observationNames() {
+  const names = ["fwd", "right", "range", "rel h", "x", "y", "cos", "sin", "wall", "gun", "edge L", "edge R", "edge B", "edge T"];
+  for (let slot = 2; slot < PLANES_MAX; slot += 1) names.push(`n${slot}`, `fwd${slot}`, `rt${slot}`, `rng${slot}`, `h${slot}`);
+  return names;
+}
+const OBS_NAMES = observationNames();
 const TIMEOUT_MIN = 10;
 const TIMEOUT_MAX = 600;
 const TIMEOUT_DT = 0.05;
@@ -957,7 +962,8 @@ function fillInspect() {
   const last = state.training?.last_actions?.brains?.[brain.id];
   text("inspect-title", brain.revision ? `${brain.label} · r${brain.revision}` : `${brain.label || "Brain"}`);
   const shape = brain.shape || {};
-  text("inspect-arch", `${shape.obs ?? 10} obs → ${shape.hidden ?? 24} hidden ReLU → ${shape.actions ?? 6} actions`);
+  text("inspect-arch", `${shape.obs ?? OBS_NAMES.length} obs → ${shape.hidden ?? 24} hidden ReLU → ${shape.actions ?? 6} actions`);
+  text("inspect-w1-cap", `W1 heatmap: ${shape.hidden ?? 24} hidden × ${shape.obs ?? OBS_NAMES.length} inputs.`);
   text("insp-upd", String(brain.updates ?? 0));
   text("insp-l2", `${num(brain.weights?.l2, 2)} / ${brain.weights?.count ?? "—"}`);
   text("insp-rms", `${num(brain.weights?.w1_rms)} (${num(brain.weights?.w1_growth)}×) · ${num(brain.weights?.w2_rms)} (${num(brain.weights?.w2_growth)}×)`);
@@ -1047,11 +1053,12 @@ function paintBrainNet(id, brain, side) {
     ctx.lineWidth = 1;
     ctx.stroke();
   });
-  ctx.font = "11px ui-monospace, monospace";
+  ctx.font = nIn > 16 ? "8px ui-monospace, monospace" : "11px ui-monospace, monospace";
   ctx.textBaseline = "middle";
+  const inR = nIn > 16 ? 3.1 : 5.2;
   ins.forEach((p, i) => {
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 5.2, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, inR, 0, Math.PI * 2);
     ctx.fillStyle = "#1b2a2e";
     ctx.fill();
     ctx.strokeStyle = "rgba(230,195,106,0.55)";

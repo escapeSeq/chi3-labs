@@ -1,6 +1,6 @@
 import numpy as np
 
-from app.physics import SPEED, TURN_RADIUS, World, decode_action, max_yaw_rate, steps_from_seconds, wrap_angle
+from app.physics import OBS, SPEED, TURN_RADIUS, World, decode_action, max_yaw_rate, steps_from_seconds, wrap_angle
 
 
 def test_turn_rate_capped_by_radius():
@@ -130,6 +130,53 @@ def test_hunt_prey_kill_hurts_the_pack():
     assert other.alive
     assert rewards[prey.name] > 0
     assert rewards[other.name] < 0
+
+
+def test_every_plane_sees_all_others_and_edges():
+    w = World(np.random.default_rng(5), n_planes=9)
+    for plane in w.planes:
+        obs = w.observe(plane.name)
+        assert obs.shape == (OBS,)
+        assert OBS == 49
+        assert all(obs[14 + 5 * slot] == 1.0 for slot in range(7))
+        assert all(obs[10:14] > 0.0)
+    w.planes[0].x, w.planes[0].y, w.planes[0].heading = 0.04, 0.5, np.pi
+    near = w.observe(w.planes[0].name)
+    assert near[10] < 0.05
+    assert near[11] > 0.9
+    assert near[8] < 0.2
+
+
+def test_three_planes_see_both_rivals():
+    w = World(np.random.default_rng(6), n_planes=3)
+    me, near, far = w.planes
+    me.x, me.y, me.heading = 0.5, 0.5, 0.0
+    near.x, near.y, near.heading = 0.7, 0.5, 0.0
+    far.x, far.y, far.heading = 0.5, 0.8, 0.0
+    obs = w.observe(me.name)
+    assert obs[0] > 0.15
+    assert abs(obs[1]) < 0.05
+    assert obs[14] == 1.0
+    assert abs(obs[15]) < 0.05
+    assert obs[16] > 0.2
+    assert np.allclose(obs[19:], 0.0)
+    near.alive = False
+    after = w.observe(me.name)
+    assert after[0] == obs[15]
+    assert after[14] == 0.0
+
+
+def test_hunt_pack_sees_prey_and_teammates():
+    w = World(np.random.default_rng(7), n_planes=3, mode="hunt")
+    prey, hunter, wing = w.planes
+    prey.x, prey.y, prey.heading = 0.2, 0.2, 0.0
+    hunter.x, hunter.y, hunter.heading = 0.8, 0.8, 0.0
+    wing.x, wing.y, wing.heading = 0.82, 0.8, 0.0
+    obs = w.observe(hunter.name)
+    assert obs[0] < 0
+    assert obs[14] == 1.0
+    assert obs[15] > 0
+    assert abs(obs[16]) < 0.05
 
 
 def test_bullets_hit_any_other_plane():

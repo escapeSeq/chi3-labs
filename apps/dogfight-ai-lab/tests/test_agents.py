@@ -6,10 +6,22 @@ from app.trainer import Academy
 
 def test_fresh_policy_is_near_uniform():
     p = Policy(np.random.default_rng(0), "red")
-    obs = np.zeros(10)
+    obs = np.zeros(OBS)
     probs = p.forward(obs)["probs"]
     assert abs(float(probs.sum()) - 1.0) < 1e-6
     assert float(probs.max()) < 0.55
+
+
+def test_legacy_brain_pads_new_observation_channels(tmp_path):
+    old = Policy(np.random.default_rng(0), "legacy")
+    old.W1 = np.ones((HIDDEN, 10))
+    path = tmp_path / "legacy.npz"
+    old.save(path)
+    loaded = Policy(np.random.default_rng(1), "padded")
+    loaded.load(path)
+    assert loaded.W1.shape == (HIDDEN, OBS)
+    assert np.allclose(loaded.W1[:, :10], 1.0)
+    assert np.allclose(loaded.W1[:, 10:], 0.0)
 
 
 def test_inspect_reports_weights_and_probe():

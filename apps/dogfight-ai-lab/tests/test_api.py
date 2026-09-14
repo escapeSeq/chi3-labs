@@ -29,8 +29,8 @@ def test_health_and_index():
     assert "Graph" in page.text
     assert 'id="winner-read"' in page.text
     assert "red-kills" not in page.text
-    assert 'href="static/styles.css?v=burst-toggle"' in page.text
-    assert 'src="static/app.js?v=burst-toggle"' in page.text
+    assert 'href="static/styles.css?v=full-obs"' in page.text
+    assert 'src="static/app.js?v=full-obs"' in page.text
     js = client.get("/static/app.js")
     assert js.status_code == 200
     assert "red-kills" not in js.text
@@ -130,7 +130,9 @@ def test_state_includes_brain_and_training_stats():
     assert len(body["brains"]["p1"]["w2"]) == 6
     assert len(body["brains"]["p1"]["w2"][0]) == 24
     assert len(body["brains"]["p1"]["w1"]) == 24
-    assert len(body["brains"]["p1"]["w1"][0]) == 10
+    assert len(body["brains"]["p1"]["w1"][0]) == 49
+    assert body["brains"]["p1"]["shape"]["obs"] == 49
+    assert len(body["brains"]["p1"]["obs_names"]) == 49
 
 
 def test_reset_stats_clears_score_keeps_brains():

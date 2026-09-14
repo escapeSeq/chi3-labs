@@ -7,7 +7,11 @@ from pathlib import Path
 
 import numpy as np
 
-OBS = 10
+if __package__:
+    from .physics import LEGACY_OBS, OBS, OBS_NAMES
+else:
+    from physics import LEGACY_OBS, OBS, OBS_NAMES
+
 HIDDEN = 24
 ACTIONS = 6
 ACTION_NAMES = (
@@ -17,18 +21,6 @@ ACTION_NAMES = (
     "left+fire",
     "straight+fire",
     "right+fire",
-)
-OBS_NAMES = (
-    "fwd",
-    "right",
-    "range",
-    "rel h",
-    "x",
-    "y",
-    "cos",
-    "sin",
-    "wall",
-    "gun",
 )
 W1_INIT_RMS = float(np.sqrt(2.0 / OBS))
 W2_INIT_RMS = 0.15
@@ -95,6 +87,7 @@ class Policy:
             b2 = np.asarray(data["b2"], dtype=float)
             baseline = np.asarray(data["baseline"], dtype=float).reshape(-1)
             updates = int(np.asarray(data["updates"]).reshape(-1)[0]) if "updates" in data.files else 0
+        w1 = _pad_w1(w1)
         if w1.shape != (HIDDEN, OBS) or b1.shape != (HIDDEN,) or w2.shape != (ACTIONS, HIDDEN) or b2.shape != (ACTIONS,):
             raise ValueError(f"brain file {path} has the wrong weight shapes")
         self.W1, self.b1, self.W2, self.b2 = w1, b1, w2, b2
@@ -227,13 +220,33 @@ class Policy:
         }
 
 
+def _pad_w1(w1: np.ndarray) -> np.ndarray:
+    if w1.shape == (HIDDEN, OBS):
+        return w1
+    if w1.ndim == 2 and w1.shape[0] == HIDDEN and LEGACY_OBS <= w1.shape[1] < OBS:
+        padded = np.zeros((HIDDEN, OBS), dtype=float)
+        padded[:, : w1.shape[1]] = w1
+        return padded
+    return w1
+
+
+def _pad_obs(core: list[float] | np.ndarray, extras: dict[int, float] | None = None) -> np.ndarray:
+    vec = np.zeros(OBS, dtype=float)
+    core = np.asarray(core, dtype=float).reshape(-1)
+    vec[: core.size] = core
+    if extras:
+        for index, value in extras.items():
+            vec[index] = float(value)
+    return vec
+
+
 def _probe_obs() -> list[np.ndarray]:
     """A few stock dogfight views so action preferences are comparable over time."""
     return [
-        np.array([0.35, 0.00, 0.25, 0.00, 0.00, 0.00, 1.00, 0.00, 0.50, 0.00]),
-        np.array([0.00, 0.35, 0.25, 0.20, 0.00, 0.00, 1.00, 0.00, 0.50, 0.00]),
-        np.array([-0.35, 0.00, 0.25, 1.00, 0.00, 0.00, 1.00, 0.00, 0.50, 0.00]),
-        np.array([0.20, 0.00, 0.15, 0.00, 0.00, 0.00, 1.00, 0.00, 0.08, 0.00]),
-        np.array([0.15, 0.02, 0.12, 0.00, 0.00, 0.00, 1.00, 0.00, 0.50, 0.00]),
-        np.array([0.15, 0.02, 0.12, 0.00, 0.00, 0.00, 1.00, 0.00, 0.50, 1.00]),
+        _pad_obs([0.35, 0.00, 0.25, 0.00, 0.00, 0.00, 1.00, 0.00, 0.50, 0.00], {10: 0.45, 11: 0.55, 12: 0.50, 13: 0.50}),
+        _pad_obs([0.00, 0.35, 0.25, 0.20, 0.00, 0.00, 1.00, 0.00, 0.50, 0.00], {10: 0.40, 11: 0.60, 12: 0.50, 13: 0.50, 14: 1.0, 15: -0.2, 17: 0.3}),
+        _pad_obs([-0.35, 0.00, 0.25, 1.00, 0.00, 0.00, 1.00, 0.00, 0.50, 0.00], {10: 0.50, 11: 0.50, 12: 0.50, 13: 0.50}),
+        _pad_obs([0.20, 0.00, 0.15, 0.00, 0.00, 0.00, 1.00, 0.00, 0.08, 0.00], {10: 0.12, 11: 0.88, 12: 0.50, 13: 0.50}),
+        _pad_obs([0.15, 0.02, 0.12, 0.00, 0.00, 0.00, 1.00, 0.00, 0.50, 0.00], {10: 0.50, 11: 0.50, 12: 0.50, 13: 0.50, 14: 1.0, 15: 0.18, 17: 0.2}),
+        _pad_obs([0.15, 0.02, 0.12, 0.00, 0.00, 0.00, 1.00, 0.00, 0.50, 1.00], {10: 0.50, 11: 0.50, 12: 0.50, 13: 0.50}),
     ]

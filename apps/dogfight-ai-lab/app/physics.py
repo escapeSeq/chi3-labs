@@ -27,6 +27,8 @@ COOLDOWN = 0.65
 GUN_RANGE = BULLET_SPEED * BULLET_LIFE
 MIN_PLANES = 2
 MAX_PLANES = 9
+OTHER_SLOTS = MAX_PLANES - 1
+LEGACY_OBS = 10
 MODE_FFA = "ffa"
 MODE_HUNT = "hunt"
 MODES = (MODE_FFA, MODE_HUNT)
@@ -70,6 +72,32 @@ def max_yaw_rate() -> float:
 
 def wrap_angle(a: float) -> float:
     return float((a + np.pi) % (2 * np.pi) - np.pi)
+
+
+def observation_names() -> tuple[str, ...]:
+    names = [
+        "fwd",
+        "right",
+        "range",
+        "rel h",
+        "x",
+        "y",
+        "cos",
+        "sin",
+        "wall",
+        "gun",
+        "edge L",
+        "edge R",
+        "edge B",
+        "edge T",
+    ]
+    for slot in range(2, MAX_PLANES):
+        names.extend([f"n{slot}", f"fwd{slot}", f"rt{slot}", f"rng{slot}", f"h{slot}"])
+    return tuple(names)
+
+
+OBS_NAMES = observation_names()
+OBS = len(OBS_NAMES)
 
 
 @dataclass
@@ -232,28 +260,43 @@ class World:
 
     def observe(self, who: str) -> np.ndarray:
         me = self._plane(who)
-        you = self._focus(me) or me
-        dx, dy = you.x - me.x, you.y - me.y
-        c, s = np.cos(me.heading), np.sin(me.heading)
-        fwd = dx * c + dy * s
-        right = -dx * s + dy * c
-        rng = float(np.hypot(dx, dy))
-        rel_h = wrap_angle(you.heading - me.heading)
-        return np.array(
-            [
-                fwd,
-                right,
-                rng / np.sqrt(2.0),
-                rel_h / np.pi,
-                (me.x - 0.5) * 2,
-                (me.y - 0.5) * 2,
-                np.cos(me.heading),
-                np.sin(me.heading),
-                _ray_to_wall(me.x, me.y, me.heading),
-                me.cooldown / COOLDOWN,
-            ],
-            dtype=float,
+        others = self._visible_others(me)
+        focus = others[0] if others else me
+        out = np.zeros(OBS, dtype=float)
+        out[0:4] = _relative_plane(me, focus)
+        out[4:10] = (
+            (me.x - 0.5) * 2,
+            (me.y - 0.5) * 2,
+            np.cos(me.heading),
+            np.sin(me.heading),
+            _ray_to_wall(me.x, me.y, me.heading),
+            me.cooldown / COOLDOWN,
         )
+        out[10:14] = _edge_distances(me.x, me.y)
+        cursor = 14
+        extra = others[1:]
+        for slot in range(OTHER_SLOTS - 1):
+            if slot < len(extra):
+                plane = extra[slot]
+                out[cursor] = 1.0 if plane.alive else 0.0
+                out[cursor + 1 : cursor + 5] = _relative_plane(me, plane)
+            cursor += 5
+        return out
+
+    def _visible_others(self, me: Plane) -> list[Plane]:
+        others = [p for p in self.planes if p.name != me.name]
+        by_range = lambda p: float(np.hypot(p.x - me.x, p.y - me.y))
+        living = [p for p in others if p.alive]
+        dead = [p for p in others if not p.alive]
+        if self.mode == MODE_HUNT:
+            prey = self.prey()
+            if prey and prey.name != me.name and prey.alive:
+                living = [prey] + sorted((p for p in living if p.name != prey.name), key=by_range)
+            else:
+                living = sorted(living, key=by_range)
+        else:
+            living = sorted(living, key=by_range)
+        return living + sorted(dead, key=by_range)
 
     def _act(self, plane: Plane, action: int, rewards: dict[str, float]) -> None:
         action = int(np.clip(action, 0, 5))
@@ -455,6 +498,25 @@ class World:
             rewards[prey.name] += 2.0 + 0.35 * pack_lost
             for q in self.pack_living():
                 rewards[q.name] -= 1.2
+
+
+def _relative_plane(me: Plane, you: Plane) -> tuple[float, float, float, float]:
+    dx, dy = you.x - me.x, you.y - me.y
+    c, s = np.cos(me.heading), np.sin(me.heading)
+    fwd = dx * c + dy * s
+    right = -dx * s + dy * c
+    rng = float(np.hypot(dx, dy)) / np.sqrt(2.0)
+    rel_h = wrap_angle(you.heading - me.heading) / np.pi
+    return float(fwd), float(right), rng, rel_h
+
+
+def _edge_distances(x: float, y: float) -> tuple[float, float, float, float]:
+    return (
+        float(np.clip(x / ARENA, 0.0, 1.0)),
+        float(np.clip((ARENA - x) / ARENA, 0.0, 1.0)),
+        float(np.clip(y / ARENA, 0.0, 1.0)),
+        float(np.clip((ARENA - y) / ARENA, 0.0, 1.0)),
+    )
 
 
 def _ray_to_wall(x: float, y: float, heading: float) -> float:
