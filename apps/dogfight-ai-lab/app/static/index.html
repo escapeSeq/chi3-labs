@@ -8,7 +8,7 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%230c1418' width='64' height='64'/%3E%3Cpath d='M12 40 L32 16 L52 40 L32 32 Z' fill='%23e85d4c'/%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=hunt-mode" />
+    <link rel="stylesheet" href="/static/styles.css?v=burst-run" />
   </head>
   <body>
     <header class="mast">
@@ -70,15 +70,6 @@
           </select>
         </label>
         <label>
-          Train this many sorties in a burst
-          <input id="episodes-num" type="number" min="100" max="10000000" value="1000000" />
-          <div class="burst-row">
-            <span>100</span>
-            <input id="episodes" type="range" min="0" max="1000" value="800" />
-            <span>10,000,000</span>
-          </div>
-        </label>
-        <label>
           Planes in the fight
           <input id="planes-num" type="number" min="2" max="9" step="1" value="2" />
           <div class="burst-row">
@@ -98,7 +89,9 @@
           </div>
           <p class="hint" id="timeout-read">600 s · 12000 steps</p>
         </label>
-        <button id="lesson" type="button">Train this burst, then keep flying</button>
+        <button id="burst-start" type="button">Start burst training....</button>
+        <button id="burst-stop" class="danger" type="button" disabled>Stop running training burst!</button>
+        <p class="hint" id="burst-read">Burst training is idle.</p>
         <p class="hint" id="status">Flights loop on their own. Empty nets first — expect walls.</p>
         <h3>Learning</h3>
         <canvas id="chart" width="420" height="180"></canvas>
@@ -211,6 +204,6 @@
         this academy on port 8082
       </p>
     </footer>
-    <script src="/static/app.js?v=hunt-mode" type="module"></script>
+    <script src="/static/app.js?v=burst-run" type="module"></script>
   </body>
 </html>

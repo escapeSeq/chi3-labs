@@ -433,6 +433,11 @@ button {
   font-size: 0.78rem;
 }
 
+.danger {
+  border-color: var(--red);
+  color: var(--red);
+}
+
 button:disabled {
   opacity: 0.5;
   cursor: wait;

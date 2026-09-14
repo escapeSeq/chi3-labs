@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -229,6 +230,12 @@ class Academy:
         self.brains = {}
         self._ensure_seat_brains(self.n_planes)
         self.lineup = default_lineup(self.n_planes)
+        self._play_lock = threading.RLock()
+        self._burst_stop = threading.Event()
+        self._burst_thread: threading.Thread | None = None
+        self.burst_running = False
+        self.burst_trained = 0
+        self.burst_error: str | None = None
         self.restore()
 
     @property
@@ -420,6 +427,7 @@ class Academy:
         tmp.replace(paths["academy"])
 
     def reset_models(self, persist: bool = True) -> None:
+        self.stop_burst(join=True)
         for slot in self.brains.values():
             if slot.stored:
                 slot.learn = False
@@ -441,6 +449,7 @@ class Academy:
         self.curves = {MODE_FFA: [], MODE_HUNT: []}
 
     def reset_flight_setup(self, persist: bool = False) -> None:
+        self.stop_burst(join=True)
         self.brains = {}
         self.mode = MODE_FFA
         self.n_planes = MIN_PLANES
@@ -772,7 +781,11 @@ class Academy:
             "updates": {bid: slot.policy.updates for bid, slot in self.brains.items()},
         }
 
-    def play(self, learn: bool = True, lr: float = 0.012, record: bool = True, persist: bool = True) -> dict:
+    def play(self, learn: bool = True, lr: float = 0.012, record: bool = True, persist: bool = True, trace: bool = True) -> dict:
+        with self._play_lock:
+            return self._play(learn=learn, lr=lr, record=record, persist=persist, trace=trace)
+
+    def _play(self, learn: bool = True, lr: float = 0.012, record: bool = True, persist: bool = True, trace: bool = True) -> dict:
         epoch = self.stats_gen
         world = World(self.rng, max_steps=self.max_steps, lineup=self.lineup, mode=self.mode)
         rolls: dict[str, list[tuple[np.ndarray, int, float]]] = {p.name: [] for p in world.planes}
@@ -795,7 +808,8 @@ class Academy:
             snap = world.snapshot()
             for pose in snap["planes"]:
                 pose["brain_label"] = labels.get(pose.get("brain_id"), pose.get("brain_id", ""))
-            frames.append(snap)
+            if trace:
+                frames.append(snap)
 
         brain_rolls: dict[str, list[tuple[np.ndarray, int, float]]] = defaultdict(list)
         last_by_brain: dict[str, np.ndarray] = {}
@@ -845,6 +859,9 @@ class Academy:
             self.empty = all(slot.policy.updates == 0 for slot in self.brains.values() if not slot.stored)
             if record and epoch == self.stats_gen:
                 self.curve.append(row)
+                extra = len(self.curve) - CURVE_KEEP
+                if extra > 0:
+                    del self.curve[:extra]
             if persist:
                 self.persist()
         return {"trace": frames, "summary": row}
@@ -852,7 +869,7 @@ class Academy:
     def lesson(self, episodes: int = 100, lr: float = 0.018) -> dict:
         rows = []
         for i in range(episodes):
-            last = self.play(learn=True, lr=lr, persist=False)
+            last = self.play(learn=True, lr=lr, persist=False, trace=False)
             rows.append(last["summary"])
             if (i + 1) % SAVE_EVERY == 0:
                 self.persist()
@@ -865,6 +882,56 @@ class Academy:
             "empty": self.empty,
             "lesson": _narrate(rows, self.score, self.brains, self.mode),
         }
+
+    def burst_status(self) -> dict:
+        return {
+            "running": bool(self.burst_running),
+            "trained": int(self.burst_trained),
+            "error": self.burst_error,
+        }
+
+    def start_burst(self, lr: float = 0.018) -> dict:
+        if self.burst_running:
+            return self.burst_status()
+        self._burst_stop.set()
+        with self._play_lock:
+            leftover = self._burst_thread
+        if leftover is not None and leftover.is_alive():
+            leftover.join(timeout=2)
+        self._burst_stop.clear()
+        self.burst_running = True
+        self.burst_trained = 0
+        self.burst_error = None
+        self._burst_thread = threading.Thread(target=self._run_burst, args=(float(lr),), daemon=True)
+        self._burst_thread.start()
+        return self.burst_status()
+
+    def stop_burst(self, join: bool = False) -> dict:
+        self._burst_stop.set()
+        if join:
+            with self._play_lock:
+                pass
+            thread = self._burst_thread
+            if thread is not None and thread.is_alive():
+                thread.join(timeout=2)
+            self.burst_running = False
+        return self.burst_status()
+
+    def _run_burst(self, lr: float) -> None:
+        try:
+            while not self._burst_stop.is_set():
+                self.play(learn=True, lr=lr, persist=False, trace=False)
+                self.burst_trained += 1
+                if self.burst_trained % SAVE_EVERY == 0:
+                    self.persist()
+        except Exception as exc:
+            self.burst_error = str(exc)
+        finally:
+            try:
+                self.persist()
+            except Exception:
+                pass
+            self.burst_running = False
 
 
 def _watch_stats(policy: Policy, rollout: list[tuple[np.ndarray, int, float]], last_obs: np.ndarray) -> dict:

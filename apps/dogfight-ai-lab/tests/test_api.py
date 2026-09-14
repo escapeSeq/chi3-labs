@@ -21,7 +21,9 @@ def test_health_and_index():
     assert "Dogfight" in page.text
     assert "Hangar" in page.text
     assert "Brain library" in page.text
-    assert "Train this burst" in page.text
+    assert "Start burst training" in page.text
+    assert "Stop running training burst" in page.text
+    assert "Train this burst" not in page.text
     assert "Graph" in page.text
     assert 'id="winner-read"' in page.text
     assert "red-kills" not in page.text
@@ -32,7 +34,6 @@ def test_health_and_index():
     assert page.headers.get("cache-control") == "no-store"
     assert "Numbers" in page.text
     assert "/data" in page.text
-    assert "10000000" in page.text
     assert "Reset statistics" not in page.text
     assert "Wipe all brains" not in page.text
     assert "Sortie timeout" in page.text
@@ -65,6 +66,33 @@ def test_watch_and_reset():
     reset = client.post("/api/reset").json()
     assert reset["empty"] is True
     assert reset["score"]["red_kills"] == 0
+
+
+def test_burst_start_and_stop():
+    import time
+
+    started = client.post("/api/burst/start", json={}).json()
+    assert started["running"] is True
+    assert started["burst"]["running"] is True
+    deadline = time.time() + 8
+    trained = 0
+    while time.time() < deadline:
+        trained = client.get("/api/burst").json()["trained"]
+        if trained >= 2:
+            break
+        time.sleep(0.05)
+    assert trained >= 1
+    client.post("/api/burst/stop")
+    deadline = time.time() + 8
+    final = {"running": True}
+    while time.time() < deadline:
+        final = client.get("/api/burst").json()
+        if not final["running"]:
+            break
+        time.sleep(0.05)
+    assert final["running"] is False
+    assert final["trained"] >= 1
+    assert client.get("/api/state").json()["score"]["episodes"] >= 1
 
 
 def test_burst_default_is_one_million():

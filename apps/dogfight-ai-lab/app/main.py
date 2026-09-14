@@ -40,6 +40,11 @@ class LessonIn(BaseModel):
     seconds: float | None = Field(default=None, ge=10.0, le=600.0)
 
 
+class BurstIn(BaseModel):
+    lr: float = Field(default=0.018, gt=0.001, le=0.08)
+    seconds: float | None = Field(default=None, ge=10.0, le=600.0)
+
+
 class TimeoutIn(BaseModel):
     seconds: float = Field(default=600.0, ge=10.0, le=600.0)
 
@@ -97,6 +102,7 @@ def _status() -> dict:
         "library": [row for row in roster if row.get("in_library")],
         "lineup": list(ACADEMY.lineup),
         "mode": ACADEMY.mode,
+        "burst": ACADEMY.burst_status(),
         "training": ACADEMY.training_report(),
         "physics": {
             "mode": ACADEMY.mode,
@@ -211,6 +217,26 @@ def lesson(body: LessonIn) -> dict:
         ACADEMY.set_max_steps(physics.steps_from_seconds(body.seconds), persist=False)
     result = ACADEMY.lesson(episodes=body.episodes, lr=body.lr)
     return {**result, **_status()}
+
+
+@app.get("/api/burst")
+def burst_state() -> dict:
+    return ACADEMY.burst_status()
+
+
+@app.post("/api/burst/start")
+def burst_start(body: BurstIn | None = None) -> dict:
+    body = body or BurstIn()
+    if body.seconds is not None:
+        ACADEMY.set_max_steps(physics.steps_from_seconds(body.seconds), persist=False)
+    burst = ACADEMY.start_burst(lr=body.lr)
+    return {**burst, **_status()}
+
+
+@app.post("/api/burst/stop")
+def burst_stop() -> dict:
+    burst = ACADEMY.stop_burst()
+    return {**burst, **_status()}
 
 
 @app.post("/api/watch")

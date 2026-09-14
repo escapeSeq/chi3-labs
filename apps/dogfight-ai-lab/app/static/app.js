@@ -24,6 +24,9 @@ const state = {
   brains: {},
   training: {},
   inspectId: null,
+  burstTimer: null,
+  bursting: false,
+  burstShown: 0,
   sort: {
     hangar: { key: "plane", dir: "asc" },
     library: { key: "revision", dir: "desc" },
@@ -33,8 +36,6 @@ const state = {
 const field = $("field");
 const fctx = field.getContext("2d");
 
-const BURST_MIN = 100;
-const BURST_MAX = 10_000_000;
 const ACTION_NAMES = ["left", "straight", "right", "left+fire", "straight+fire", "right+fire"];
 const OBS_NAMES = ["fwd", "right", "range", "rel h", "x", "y", "cos", "sin", "wall", "gun"];
 const PLANES_MIN = 2;
@@ -154,36 +155,7 @@ function seatColor(i) {
   return PALETTE[i % PALETTE.length];
 }
 
-function burstSize() {
-  const n = Number($("episodes-num").value);
-  if (!Number.isFinite(n)) return 1_000_000;
-  return Math.min(BURST_MAX, Math.max(BURST_MIN, Math.round(n)));
-}
-
-function burstToSlider(n) {
-  const clamped = Math.min(BURST_MAX, Math.max(BURST_MIN, n));
-  const t = Math.log(clamped / BURST_MIN) / Math.log(BURST_MAX / BURST_MIN);
-  return String(Math.round(t * 1000));
-}
-
-function sliderToBurst(raw) {
-  const t = Math.min(1, Math.max(0, Number(raw) / 1000));
-  if (t <= 0) return BURST_MIN;
-  if (t >= 1) return BURST_MAX;
-  const n = BURST_MIN * (BURST_MAX / BURST_MIN) ** t;
-  const exp = Math.floor(Math.log10(n));
-  const step = 10 ** Math.max(exp - 1, 0);
-  return Math.min(BURST_MAX, Math.max(BURST_MIN, Math.round(n / step) * step));
-}
-
-function setBurst(n) {
-  const v = String(Math.min(BURST_MAX, Math.max(BURST_MIN, Math.round(n))));
-  $("episodes").value = burstToSlider(Number(v));
-  $("episodes-num").value = v;
-}
-
-$("episodes").addEventListener("input", () => setBurst(sliderToBurst($("episodes").value)));
-$("episodes-num").addEventListener("change", () => setBurst(burstSize()));
+const BURST_REPORT = 10_000;
 
 function timeoutSeconds() {
   const n = Number($("timeout-num").value);
@@ -749,32 +721,119 @@ async function wipeBrain(id) {
 }
 
 $("pause").addEventListener("click", () => {
+  if (state.bursting) return;
   if (state.running) pauseFlights();
   else resumeFlights();
 });
 
-$("lesson").addEventListener("click", async () => {
-  $("lesson").disabled = true;
-  setBurst(burstSize());
-  pauseFlights();
-  $("status").textContent = `Fast-forwarding ${burstSize()} sorties…`;
+function burstMilestone(trained) {
+  return Math.floor(Math.max(0, Number(trained) || 0) / BURST_REPORT) * BURST_REPORT;
+}
+
+function setBurstControls(running) {
+  state.bursting = Boolean(running);
+  if ($("burst-start")) $("burst-start").disabled = state.bursting;
+  if ($("burst-stop")) $("burst-stop").disabled = !state.bursting;
+  if ($("pause")) $("pause").disabled = state.bursting;
+}
+
+function stopBurstPoll() {
+  if (state.burstTimer != null) {
+    clearInterval(state.burstTimer);
+    state.burstTimer = null;
+  }
+}
+
+function startBurstPoll() {
+  stopBurstPoll();
+  state.burstTimer = setInterval(pollBurst, 400);
+}
+
+async function pollBurst() {
   try {
-    const res = await fetch("/api/lesson", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ episodes: burstSize(), lr: 0.018, seconds: timeoutSeconds() }),
-    });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.detail || "Lesson failed");
-    applyStatus(body);
-    $("status").textContent = `${body.lesson} Continuous flights resume.`;
-    $("lesson-note").textContent = body.lesson;
-    resumeFlights();
+    const burst = await (await fetch("/api/burst")).json();
+    const trained = Number(burst.trained || 0);
+    const mark = burstMilestone(trained);
+    if (mark >= BURST_REPORT && mark !== state.burstShown) {
+      state.burstShown = mark;
+      text("burst-read", `Burst training · ${mark.toLocaleString()} sorties`);
+      $("status").textContent = `Burst training running · ${mark.toLocaleString()} sorties.`;
+      const snap = await (await fetch("/api/state")).json();
+      applyStatus(snap);
+    } else if (!state.burstShown) {
+      text("burst-read", "Burst training · 0 sorties");
+    }
+    if (!burst.running) {
+      stopBurstPoll();
+      finishBurst(burst);
+    }
   } catch (err) {
     $("status").textContent = err.message;
+  }
+}
+
+function finishBurst(burst) {
+  const shouldResume = state.bursting;
+  stopBurstPoll();
+  const trained = Number(burst?.trained || 0);
+  setBurstControls(false);
+  text(
+    "burst-read",
+    burst?.error
+      ? `Burst stopped with an error after ${trained.toLocaleString()} sorties.`
+      : `Burst stopped after ${trained.toLocaleString()} sorties.`
+  );
+  $("status").textContent = burst?.error
+    ? burst.error
+    : `Stopped burst training after ${trained.toLocaleString()} sorties. Continuous flights resume.`;
+  if (trained) {
+    fetch("/api/state")
+      .then((res) => res.json())
+      .then((snap) => applyStatus(snap))
+      .catch(() => {});
+  }
+  if (shouldResume) resumeFlights();
+}
+
+$("burst-start")?.addEventListener("click", async () => {
+  if (state.bursting) return;
+  pauseFlights();
+  setBurstControls(true);
+  state.burstShown = 0;
+  text("burst-read", "Burst training · 0 sorties");
+  $("status").textContent = "Burst training started. Counter updates every 10,000 sorties.";
+  try {
+    const res = await fetch("/api/burst/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lr: 0.018, seconds: timeoutSeconds() }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail || "Burst start failed");
+    applyStatus(body);
+    startBurstPoll();
+  } catch (err) {
+    setBurstControls(false);
+    $("status").textContent = err.message;
     resumeFlights();
-  } finally {
-    $("lesson").disabled = false;
+  }
+});
+
+$("burst-stop")?.addEventListener("click", async () => {
+  $("burst-stop").disabled = true;
+  $("status").textContent = "Stopping burst after the current sortie…";
+  try {
+    const res = await fetch("/api/burst/stop", { method: "POST" });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail || "Burst stop failed");
+    if (!body.running) {
+      stopBurstPoll();
+      applyStatus(body);
+      finishBurst(body);
+    }
+  } catch (err) {
+    $("status").textContent = err.message;
+    if (state.bursting) $("burst-stop").disabled = false;
   }
 });
 
@@ -1077,6 +1136,7 @@ function pauseFlights() {
 }
 
 function resumeFlights() {
+  if (state.bursting) return;
   state.running = true;
   state.loopId += 1;
   state.busy = false;
@@ -1088,7 +1148,7 @@ function resumeFlights() {
 }
 
 async function flyNext(loopId) {
-  if (!state.running || loopId !== state.loopId || state.busy) return;
+  if (state.bursting || !state.running || loopId !== state.loopId || state.busy) return;
   state.busy = true;
   try {
     const res = await fetch("/api/sortie", { method: "POST" });
@@ -1263,10 +1323,23 @@ function paintChart(curve) {
 async function boot() {
   const snap = await (await fetch("/api/state")).json();
   applyStatus(snap);
-  setBurst(burstSize());
   if (snap.physics?.timeout != null) setTimeoutSeconds(snap.physics.timeout);
   if (snap.physics?.n_planes != null) setPlaneCount(snap.physics.n_planes);
   drawEmpty();
+  if (snap.burst?.running) {
+    setBurstControls(true);
+    state.burstShown = burstMilestone(snap.burst.trained);
+    text(
+      "burst-read",
+      state.burstShown
+        ? `Burst training · ${state.burstShown.toLocaleString()} sorties`
+        : "Burst training · 0 sorties"
+    );
+    $("status").textContent = "Burst training is already running. Counter updates every 10,000 sorties.";
+    pauseFlights();
+    startBurstPoll();
+    return;
+  }
   if (snap.stored && !snap.empty) {
     $("status").textContent = `Restored brains from ${snap.data_dir}. Continuous flights resume.`;
   }
