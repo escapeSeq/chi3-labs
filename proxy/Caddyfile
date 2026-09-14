@@ -5,6 +5,10 @@
 
 :{$PORT:8080} {
 	encode gzip
+	log {
+		output stdout
+		format console
+	}
 
 	handle /healthz {
 		respond "ok" 200
@@ -15,15 +19,30 @@
 	redir /dogfight /dogfight/ 308
 
 	handle_path /analog/* {
-		reverse_proxy {$ANALOG_UPSTREAM:analog-chi3-lab:8080}
+		reverse_proxy http://{$ANALOG_UPSTREAM} {
+			transport http {
+				dial_timeout 8s
+			}
+			lb_try_duration 12s
+		}
 	}
 
 	handle_path /handwriting/* {
-		reverse_proxy {$HANDWRITING_UPSTREAM:handwriting-ai-lab:8081}
+		reverse_proxy http://{$HANDWRITING_UPSTREAM} {
+			transport http {
+				dial_timeout 8s
+			}
+			lb_try_duration 12s
+		}
 	}
 
 	handle_path /dogfight/* {
-		reverse_proxy {$DOGFIGHT_UPSTREAM:dogfight-ai-lab:8082}
+		reverse_proxy http://{$DOGFIGHT_UPSTREAM} {
+			transport http {
+				dial_timeout 8s
+			}
+			lb_try_duration 12s
+		}
 	}
 
 	handle {

@@ -59,8 +59,10 @@ On Railway (behind the monorepo proxy):
   with `Dockerfile` and `requirements.txt`, not the inner `app/` package).
 - Do **not** generate a public domain here. The `proxy` service is the
   public entry; this lab is reached at `/dogfight/` over private networking.
-- Set `PORT=8082` and leave the start command empty so the Dockerfile can
-  run uvicorn on `$PORT`.
+- Set `PORT=8082` as a **service variable** (not only Railway's runtime
+  `PORT`) and leave the start command empty so the Dockerfile can run
+  uvicorn on `$PORT`. The image binds dual-stack so the proxy can reach
+  this lab over Railway private IPv6.
 - Do not put `VOLUME` in the Dockerfile. Attach a **Railway Volume** with
   mount path `/data` — never `/app` or `/lab`, or the volume will hide the
   installed code and you will see `ModuleNotFoundError: numpy`.

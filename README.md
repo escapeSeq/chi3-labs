@@ -34,6 +34,10 @@ public domain; the labs talk to it over Railway private networking.
 | `dogfight-ai-lab` | `apps/dogfight-ai-lab` | no | Set `PORT=8082`. Attach a volume at `/data` |
 | `proxy` | `proxy` | yes | Generate the public domain here |
 
+`PORT` on each lab must be a **service variable** in the Railway dashboard
+(8080 / 8081 / 8082). `${{service.PORT}}` does not pick up the runtime
+`PORT` Railway injects, so the proxy would get `host:` and return 502.
+
 On the **proxy** service:
 
 | Variable | Value |
@@ -42,6 +46,12 @@ On the **proxy** service:
 | `HANDWRITING_UPSTREAM` | `${{handwriting-ai-lab.RAILWAY_PRIVATE_DOMAIN}}:${{handwriting-ai-lab.PORT}}` |
 | `DOGFIGHT_UPSTREAM` | `${{dogfight-ai-lab.RAILWAY_PRIVATE_DOMAIN}}:${{dogfight-ai-lab.PORT}}` |
 
-Leave each service's start command empty so the Dockerfiles run. Do not
-put `VOLUME` in the dogfight Dockerfile; mount the Railway volume at
-`/data`, never `/app` or `/lab`.
+If those are unset, the proxy defaults to
+`<service-name>.railway.internal` plus the ports above — only if the
+Railway service names match this table.
+
+Leave each service's start command empty so the Dockerfiles run. The lab
+images bind dual-stack (`--host ''`) so Railway's private IPv6 network can
+reach them; IPv4-only `0.0.0.0` makes the hub work and every `/analog/`,
+`/handwriting/`, `/dogfight/` URL 502. Do not put `VOLUME` in the dogfight
+Dockerfile; mount the Railway volume at `/data`, never `/app` or `/lab`.
