@@ -6,15 +6,14 @@
     <title>χ³ Analog Lab — nonlinear computing at volume</title>
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%23120c14' width='64' height='64'/%3E%3Ctext x='32' y='42' text-anchor='middle' fill='%23ff4d8d' font-size='22' font-family='monospace'%3Eχ3%3C/text%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%230c1418' width='64' height='64'/%3E%3Ctext x='32' y='42' text-anchor='middle' fill='%23e6c36a' font-size='22' font-family='monospace'%3Eχ3%3C/text%3E%3C/svg%3E"
     />
     <link rel="stylesheet" href="static/styles.css" />
   </head>
   <body>
-    <div class="grain" aria-hidden="true"></div>
     <header class="mast">
       <div class="brand">
-        <span class="chi">χ³</span>
+        <span class="mark">χ³</span>
         <div>
           <p class="eyebrow">Chi3-labs · analog computing lab</p>
           <h1>Nonlinear analog physics as a high-volume computer</h1>
@@ -140,9 +139,9 @@
             </article>
           </div>
           <p class="legend" aria-label="Graph legend">
-            <span><i class="swatch teal"></i> spin +1 / edge cut</span>
-            <span><i class="swatch pink"></i> spin −1 / edge uncut</span>
-            <span>Radius on the analog pane is |xᵢ|. Yellow ring marks the digital bit being updated.</span>
+            <span><i class="swatch plus"></i> spin +1 / edge cut</span>
+            <span><i class="swatch minus"></i> spin −1 / edge uncut</span>
+            <span>Radius on the analog pane is |xᵢ|. Amber ring marks the digital bit being updated.</span>
           </p>
           <article class="trace">
             <header>
@@ -381,7 +380,7 @@
             can force another not to be cut.
           </p>
           <p>
-            Teal edges are currently cut; pink edges are uncut. The oscilloscope
+            Cyan edges are currently cut; red edges are uncut. The oscilloscope
             plots cut vs effort. Higher cut is better. Analog best cut and
             digital best cut are the highest values each solver reached on this run.
           </p>

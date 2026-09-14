@@ -191,7 +191,7 @@ function drawGraph(canvas, instance, values, analog, tick) {
   const w = canvas.width;
   const h = canvas.height;
   ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = "#09060b";
+  ctx.fillStyle = "#081014";
   ctx.fillRect(0, 0, w, h);
   const pad = 36;
   const pos = instance.positions.map(([x, y]) => [
@@ -208,7 +208,7 @@ function drawGraph(canvas, instance, values, analog, tick) {
     ctx.beginPath();
     ctx.moveTo(a[0], a[1]);
     ctx.lineTo(b[0], b[1]);
-    ctx.strokeStyle = cut ? "rgba(62, 224, 212, 0.42)" : "rgba(255, 77, 141, 0.28)";
+    ctx.strokeStyle = cut ? "rgba(61, 184, 197, 0.42)" : "rgba(232, 93, 76, 0.28)";
     ctx.lineWidth = 0.8 + e.weight;
     ctx.stroke();
   }
@@ -220,21 +220,21 @@ function drawGraph(canvas, instance, values, analog, tick) {
     const r = 5.5 + 5.5 * mag;
     ctx.beginPath();
     ctx.arc(x, y, 7.5, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(246, 234, 215, 0.28)";
+    ctx.strokeStyle = "rgba(231, 239, 230, 0.28)";
     ctx.lineWidth = 1;
     ctx.stroke();
     ctx.beginPath();
     ctx.arc(x, y, r + 2, 0, Math.PI * 2);
-    ctx.fillStyle = spin > 0 ? `rgba(62, 224, 212, ${0.12 + 0.2 * mag})` : `rgba(255, 77, 141, ${0.12 + 0.2 * mag})`;
+    ctx.fillStyle = spin > 0 ? `rgba(61, 184, 197, ${0.12 + 0.2 * mag})` : `rgba(232, 93, 76, ${0.12 + 0.2 * mag})`;
     ctx.fill();
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle = spin > 0 ? "#3ee0d4" : "#ff4d8d";
+    ctx.fillStyle = spin > 0 ? "#3db8c5" : "#e85d4c";
     ctx.globalAlpha = 0.45 + 0.55 * mag;
     ctx.fill();
     ctx.globalAlpha = 1;
     if (!analog && i === tick % instance.n) {
-      ctx.strokeStyle = "#d4f25a";
+      ctx.strokeStyle = "#e6c36a";
       ctx.lineWidth = 2;
       ctx.stroke();
     }
@@ -247,7 +247,7 @@ function drawEnergy(t) {
   const w = canvas.width;
   const h = canvas.height;
   ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = "#09060b";
+  ctx.fillStyle = "#081014";
   ctx.fillRect(0, 0, w, h);
   const analog = state.run.analog.cuts;
   const digital = state.run.digital.cuts;
@@ -268,12 +268,12 @@ function drawEnergy(t) {
     ctx.lineWidth = 2;
     ctx.stroke();
   };
-  plot(analog, "#3ee0d4", Math.max(2, Math.floor(t * analog.length)));
-  plot(digital, "#ffb020", Math.max(2, Math.floor(t * digital.length)));
+  plot(analog, "#3db8c5", Math.max(2, Math.floor(t * analog.length)));
+  plot(digital, "#e6c36a", Math.max(2, Math.floor(t * digital.length)));
   ctx.font = "12px ui-monospace, monospace";
-  ctx.fillStyle = "#3ee0d4";
+  ctx.fillStyle = "#3db8c5";
   ctx.fillText("analog cut", 20, 18);
-  ctx.fillStyle = "#ffb020";
+  ctx.fillStyle = "#e6c36a";
   ctx.fillText("digital cut", 120, 18);
 }
 
@@ -282,10 +282,10 @@ function paintField(canvas, grid, kind) {
   const n = grid.length;
   const img = ctx.createImageData(canvas.width, canvas.height);
   const palettes = {
-    input: [80, 200, 210],
-    mix: [80, 160, 255],
-    phase: [255, 70, 150],
-    out: [220, 240, 90],
+    input: [61, 184, 197],
+    mix: [141, 210, 216],
+    phase: [230, 195, 106],
+    out: [232, 93, 76],
   };
   const [r0, g0, b0] = palettes[kind];
   for (let y = 0; y < canvas.height; y += 1) {
@@ -308,9 +308,9 @@ drawEmpty($("digital-graph"), "waiting for digital walk");
 
 function drawEmpty(canvas, label) {
   const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#09060b";
+  ctx.fillStyle = "#081014";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#b6a28c";
-  ctx.font = "16px Georgia, serif";
+  ctx.fillStyle = "#8aa09a";
+  ctx.font = "16px Trebuchet MS, Segoe UI, sans-serif";
   ctx.fillText(label, 24, canvas.height / 2);
 }

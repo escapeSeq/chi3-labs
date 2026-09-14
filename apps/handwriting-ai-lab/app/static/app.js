@@ -17,10 +17,9 @@ const pad = $("pad");
 const pctx = pad.getContext("2d");
 
 function clearPad() {
-  pctx.fillStyle = "#fffaf0";
+  pctx.fillStyle = "#081014";
   pctx.fillRect(0, 0, pad.width, pad.height);
-  // faint notebook cross
-  pctx.strokeStyle = "rgba(42, 75, 124, 0.08)";
+  pctx.strokeStyle = "rgba(231, 239, 230, 0.08)";
   pctx.beginPath();
   pctx.moveTo(pad.width / 2, 12);
   pctx.lineTo(pad.width / 2, pad.height - 12);
@@ -41,7 +40,7 @@ function padPos(event) {
 }
 
 function strokeTo(from, to) {
-  pctx.strokeStyle = "#1d2430";
+  pctx.strokeStyle = "#e7efe6";
   pctx.lineWidth = 22;
   pctx.lineCap = "round";
   pctx.lineJoin = "round";
@@ -109,11 +108,11 @@ function readGrid() {
       for (let yy = y0; yy < y1; yy += 1) {
         for (let xx = x0; xx < x1; xx += 1) {
           const i = (yy * width + xx) * 4;
-          const darkness = 1 - (data[i] + data[i + 1] + data[i + 2]) / (3 * 255);
-          if (darkness > peak) peak = darkness;
+          const brightness = (data[i] + data[i + 1] + data[i + 2]) / (3 * 255);
+          if (brightness > peak) peak = brightness;
         }
       }
-      grid[y][x] = Math.max(0, Math.min(1, peak));
+      grid[y][x] = Math.max(0, Math.min(1, (peak - 0.08) / 0.85));
     }
   }
   return grid;
@@ -123,12 +122,12 @@ function paintSees(grid) {
   const canvas = $("sees");
   const ctx = canvas.getContext("2d");
   const cell = canvas.width / GRID;
-  ctx.fillStyle = "#243126";
+  ctx.fillStyle = "#081014";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   for (let y = 0; y < GRID; y += 1) {
     for (let x = 0; x < GRID; x += 1) {
       const v = grid[y][x];
-      ctx.fillStyle = `rgb(${Math.round(36 + 210 * v)}, ${Math.round(48 + 200 * v)}, ${Math.round(40 + 160 * v)})`;
+      ctx.fillStyle = `rgb(${Math.round(8 + 223 * v)}, ${Math.round(16 + 179 * v)}, ${Math.round(20 + 86 * v)})`;
       ctx.fillRect(x * cell + 1, y * cell + 1, cell - 2, cell - 2);
     }
   }
@@ -307,11 +306,11 @@ function highlightStep(n) {
 function paintLoss(losses, accs = []) {
   const canvas = $("loss");
   const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#243126";
+  ctx.fillStyle = "#081014";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#f3ead3";
+  ctx.fillStyle = "#8aa09a";
   ctx.font = "12px ui-monospace, monospace";
-  ctx.fillText("loss (chalk) and accuracy (leaf)", 12, 18);
+  ctx.fillText("loss (amber) and accuracy (cyan)", 12, 18);
   if (losses.length < 2) return;
   const maxL = Math.max(...losses, 0.2);
   const line = (series, color, maxV) => {
@@ -326,14 +325,14 @@ function paintLoss(losses, accs = []) {
     ctx.lineWidth = 2;
     ctx.stroke();
   };
-  line(losses, "#f3ead3", maxL);
-  if (accs.length) line(accs, "#8fd4a2", 1);
+  line(losses, "#e6c36a", maxL);
+  if (accs.length) line(accs, "#3db8c5", 1);
 }
 
 function paintTemplates(maps) {
   const canvas = $("templates");
   const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#243126";
+  ctx.fillStyle = "#081014";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   if (!maps || !maps.length) return;
   const n = maps.length;
@@ -346,7 +345,7 @@ function paintTemplates(maps) {
         const v = grid[y][x];
         const pos = Math.max(0, v);
         const neg = Math.max(0, -v);
-        ctx.fillStyle = `rgb(${Math.round(36 + 200 * neg)}, ${Math.round(48 + 170 * pos)}, ${Math.round(40 + 40 * pos)})`;
+        ctx.fillStyle = `rgb(${Math.round(8 + 224 * neg)}, ${Math.round(16 + 77 * pos + 77 * neg)}, ${Math.round(20 + 181 * pos)})`;
         ctx.fillRect(ox + x * cell, 8 + y * cell, Math.max(cell - 0.4, 1), Math.max(cell - 0.4, 1));
       }
     }
@@ -356,7 +355,7 @@ function paintTemplates(maps) {
 function paintNet(grid, infer, phase) {
   const canvas = $("net");
   const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#243126";
+  ctx.fillStyle = "#081014";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const showHidden = phase > 4;
   const showOut = phase > 10;
@@ -367,13 +366,13 @@ function paintNet(grid, infer, phase) {
   const cell = 9;
   const gx = 18;
   const gy = 36;
-  ctx.fillStyle = "#f3ead3";
+  ctx.fillStyle = "#8aa09a";
   ctx.font = "11px ui-monospace, monospace";
   ctx.fillText("input 16×16", gx, 22);
   for (let y = 0; y < GRID; y += 1) {
     for (let x = 0; x < GRID; x += 1) {
       const v = grid[y][x] * Math.min(1, phase / 3);
-      ctx.fillStyle = `rgb(${Math.round(40 + 200 * v)}, ${Math.round(50 + 190 * v)}, ${Math.round(42 + 150 * v)})`;
+      ctx.fillStyle = `rgb(${Math.round(8 + 223 * v)}, ${Math.round(16 + 179 * v)}, ${Math.round(20 + 86 * v)})`;
       ctx.fillRect(gx + x * cell, gy + y * cell, cell - 1, cell - 1);
     }
   }
@@ -385,12 +384,12 @@ function paintNet(grid, infer, phase) {
     ctx.beginPath();
     ctx.arc(hx, y, 7, 0, Math.PI * 2);
     const lit = showHidden ? Math.min(1, h / 2) : 0;
-    ctx.fillStyle = `rgb(${Math.round(40 + 80 * lit)}, ${Math.round(70 + 160 * lit)}, ${Math.round(70 + 80 * lit)})`;
+    ctx.fillStyle = `rgb(${Math.round(12 + 49 * lit)}, ${Math.round(20 + 164 * lit)}, ${Math.round(24 + 173 * lit)})`;
     ctx.fill();
-    ctx.strokeStyle = "#f3ead3";
+    ctx.strokeStyle = "#8aa09a";
     ctx.stroke();
   });
-  ctx.fillStyle = "#f3ead3";
+  ctx.fillStyle = "#8aa09a";
   ctx.fillText("hidden", hx - 18, 450);
 
   // outputs
@@ -398,9 +397,9 @@ function paintNet(grid, infer, phase) {
   probs.forEach((p, i) => {
     const y = 40 + i * 40;
     const w = showOut ? 18 + 90 * p : 18;
-    ctx.fillStyle = infer && showOut && i === infer.guess ? "#d45a4c" : "#8fd4a2";
+    ctx.fillStyle = infer && showOut && i === infer.guess ? "#e85d4c" : "#3db8c5";
     ctx.fillRect(ox, y, w, 18);
-    ctx.fillStyle = "#f3ead3";
+    ctx.fillStyle = "#e7efe6";
     ctx.fillText(String(i), ox - 16, y + 13);
   });
 }

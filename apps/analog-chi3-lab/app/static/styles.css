@@ -1,14 +1,12 @@
 :root {
-  --void: #120c14;
-  --ink: #f6ead7;
-  --mute: #b6a28c;
-  --panel: #1c141d;
-  --line: rgba(246, 234, 215, 0.12);
-  --pump: #3ee0d4;
-  --chi: #ff4d8d;
-  --phosphor: #d4f25a;
-  --digital: #ffb020;
-  --shadow: #070407;
+  --void: #0c1418;
+  --panel: #152026;
+  --ink: #e7efe6;
+  --mute: #8aa09a;
+  --red: #e85d4c;
+  --blue: #3db8c5;
+  --line: rgba(231, 239, 230, 0.12);
+  --amber: #e6c36a;
 }
 
 * {
@@ -19,84 +17,83 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background: radial-gradient(1200px 700px at 15% -10%, #3a1630 0%, transparent 50%),
-    radial-gradient(900px 500px at 100% 0%, #12343a 0%, transparent 42%),
+  background:
+    radial-gradient(900px 500px at 10% -10%, #1b3034 0%, transparent 50%),
     var(--void);
   color: var(--ink);
-  font-family: "Palatino Linotype", Palatino, "Iowan Old Style", Georgia, serif;
-}
-
-.grain {
-  pointer-events: none;
-  position: fixed;
-  inset: 0;
-  opacity: 0.08;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
 }
 
 .mast,
+.tabs,
 main,
 footer {
-  width: min(1380px, calc(100% - 2rem));
+  width: min(1280px, calc(100% - 2rem));
   margin: 0 auto;
 }
 
 .mast {
-  padding: 2.2rem 0 1rem;
+  padding: 1.8rem 0 0.6rem;
 }
 
 .brand {
   display: flex;
-  gap: 1.1rem;
+  gap: 1rem;
   align-items: flex-start;
 }
 
-.chi {
-  flex: 0 0 auto;
-  width: 4.2rem;
-  height: 4.2rem;
+.mark {
+  width: 3.6rem;
+  height: 3.6rem;
   display: grid;
   place-items: center;
-  border: 1px solid var(--chi);
-  color: var(--chi);
-  font-family: ui-monospace, "IBM Plex Mono", "SF Mono", Menlo, monospace;
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 1.6rem;
   letter-spacing: 0.04em;
-  box-shadow: 0 0 24px rgba(255, 77, 141, 0.25);
 }
 
 .eyebrow {
   margin: 0;
-  color: var(--pump);
+  color: var(--amber);
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
-h1,
-h2,
-h3 {
-  font-weight: 600;
+h1 {
+  margin: 0.2rem 0 0;
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
   letter-spacing: -0.02em;
 }
 
-h1 {
-  margin: 0.2rem 0 0;
-  font-size: clamp(1.6rem, 3vw, 2.3rem);
-  line-height: 1.15;
+h2,
+h3 {
+  margin: 0 0 0.45rem;
+  font-size: 1rem;
+}
+
+.lede,
+.hint,
+.caption,
+.help,
+footer,
+.primer p,
+.glossary p {
+  color: var(--mute);
+  line-height: 1.5;
 }
 
 .lede {
-  max-width: 70ch;
-  color: var(--mute);
-  font-size: 1.05rem;
-  line-height: 1.55;
+  max-width: 72ch;
 }
 
 .tabs {
   display: flex;
-  gap: 0.4rem;
+  flex-wrap: wrap;
+  gap: 0.35rem;
   margin: 0.4rem auto 1rem;
 }
 
@@ -108,18 +105,30 @@ summary {
   font: inherit;
 }
 
-.tab {
-  background: transparent;
-  color: var(--mute);
+button {
+  font: inherit;
+  width: 100%;
+  margin: 0.28rem 0;
   border: 1px solid var(--line);
-  padding: 0.45rem 0.85rem;
+  background: #0f1a1e;
+  color: var(--ink);
+  padding: 0.55rem 0.7rem;
   cursor: pointer;
 }
 
+.tab {
+  width: auto;
+  margin: 0;
+  padding: 0.4rem 0.75rem;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .tab.is-on {
-  color: var(--void);
-  background: var(--ink);
-  border-color: var(--ink);
+  border-color: var(--amber);
+  color: var(--amber);
 }
 
 .panel {
@@ -145,9 +154,9 @@ summary {
 .primer article,
 .glossary article,
 .fields figure {
-  background: color-mix(in srgb, var(--panel) 88%, black);
+  background: var(--panel);
   border: 1px solid var(--line);
-  padding: 0.95rem;
+  padding: 0.85rem 1rem;
 }
 
 .rack h2,
@@ -161,24 +170,26 @@ summary {
 label {
   display: grid;
   gap: 0.25rem;
-  margin: 0.7rem 0;
+  margin: 0.5rem 0 0.8rem;
   color: var(--mute);
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 0.74rem;
-  letter-spacing: 0.04em;
 }
 
 input[type="range"] {
   width: 100%;
-  accent-color: var(--chi);
+  accent-color: var(--amber);
 }
 
 input[type="number"],
 select {
-  background: var(--shadow);
+  width: 100%;
+  background: #0f1a1e;
   color: var(--ink);
   border: 1px solid var(--line);
-  padding: 0.35rem 0.45rem;
+  padding: 0.32rem 0.4rem;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.78rem;
 }
 
 .actions {
@@ -186,47 +197,53 @@ select {
 }
 
 .primary {
-  width: 100%;
-  border: 0;
-  background: linear-gradient(90deg, var(--chi), #ff8a5b);
-  color: #1a0710;
-  padding: 0.7rem 0.8rem;
-  cursor: pointer;
+  background: var(--amber);
+  color: #1a1206;
+  border-color: var(--amber);
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
+  font-size: 0.78rem;
 }
 
+button:disabled,
 .primary:disabled {
   opacity: 0.5;
   cursor: wait;
 }
 
-.hint,
 .caption,
 footer {
-  color: var(--mute);
   font-size: 0.88rem;
-  line-height: 1.45;
 }
 
 .help {
   margin: -0.2rem 0 0.65rem;
-  color: var(--mute);
   font-size: 0.78rem;
   line-height: 1.4;
 }
 
 .term-jump {
   display: inline;
+  width: auto;
+  margin: 0;
   padding: 0;
   border: 0;
   background: none;
-  color: var(--pump);
+  color: var(--blue);
   cursor: pointer;
   font: inherit;
   text-decoration: underline;
   text-underline-offset: 0.18em;
+}
+
+details summary {
+  cursor: pointer;
+  color: var(--amber);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .legend {
@@ -236,7 +253,7 @@ footer {
   margin: 0;
   padding: 0.55rem 0.75rem;
   border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--panel) 88%, black);
+  background: var(--panel);
   color: var(--mute);
   font-size: 0.82rem;
 }
@@ -250,12 +267,12 @@ footer {
   border-radius: 50%;
 }
 
-.legend .swatch.teal {
-  background: var(--pump);
+.legend .swatch.plus {
+  background: var(--blue);
 }
 
-.legend .swatch.pink {
-  background: var(--chi);
+.legend .swatch.minus {
+  background: var(--red);
 }
 
 .stage {
@@ -281,23 +298,24 @@ canvas {
   width: 100%;
   height: auto;
   display: block;
-  background: #09060b;
+  background: #081014;
   border: 1px solid var(--line);
 }
 
 .badge {
+  display: inline-block;
+  border: 1px solid var(--amber);
+  color: var(--amber);
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 0.68rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--pump);
-  border: 1px solid var(--pump);
   padding: 0.15rem 0.4rem;
 }
 
 .badge.muted {
-  color: var(--digital);
-  border-color: var(--digital);
+  border-color: var(--blue);
+  color: var(--blue);
 }
 
 .inline {
@@ -313,28 +331,25 @@ canvas {
   justify-content: space-between;
   gap: 0.6rem;
   border-bottom: 1px solid var(--line);
-  padding: 0.45rem 0;
+  padding: 0.35rem 0;
 }
 
 dt {
   color: var(--mute);
-  font-size: 0.82rem;
 }
 
 dd {
   margin: 0;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.82rem;
-  color: var(--phosphor);
+  color: var(--amber);
 }
 
 blockquote {
-  margin: 1rem 0 0;
-  padding: 0.7rem 0 0;
+  margin: 0.8rem 0 0;
+  padding-top: 0.6rem;
   border-top: 1px solid var(--line);
   color: var(--ink);
   font-size: 0.95rem;
-  line-height: 1.5;
 }
 
 .fields {
@@ -353,9 +368,9 @@ blockquote {
 .eq {
   overflow-x: auto;
   padding: 0.8rem;
-  background: #09060b;
+  background: #081014;
   border: 1px solid var(--line);
-  color: var(--pump);
+  color: var(--amber);
   font-size: 0.95rem;
 }
 
@@ -382,8 +397,7 @@ blockquote {
 }
 
 .glossary article.is-focus {
-  border-color: var(--pump);
-  box-shadow: 0 0 0 1px var(--pump);
+  border-color: var(--amber);
 }
 
 .term-table {
@@ -406,14 +420,15 @@ blockquote {
 
 .term-table dd {
   margin: 0;
+  color: var(--mute);
 }
 
 footer {
-  padding: 1.4rem 0 2rem;
+  padding: 1.2rem 0 2rem;
 }
 
 footer a {
-  color: var(--pump);
+  color: var(--blue);
 }
 
 @media (max-width: 1080px) {
