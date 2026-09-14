@@ -38,6 +38,42 @@ footer {
   padding: 1.8rem 0 0.6rem;
 }
 
+.mast-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.2rem 1.6rem;
+}
+
+.mast-top .brand {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.labs {
+  flex: 0 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem 0.95rem;
+  padding-top: 0.2rem;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.labs a {
+  color: var(--blue);
+  text-decoration: none;
+  width: auto;
+}
+
+.labs a:hover,
+.labs a:focus-visible {
+  color: var(--amber);
+}
+
 .brand {
   display: flex;
   gap: 1rem;
@@ -321,14 +357,20 @@ footer {
   padding: 1.2rem 0 2rem;
 }
 
-footer a {
-  color: var(--blue);
-}
-
 @media (max-width: 1080px) {
   main,
   .steps ol,
   .mini-loop {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .mast-top {
+    flex-direction: column;
+  }
+
+  .labs {
+    justify-content: flex-start;
   }
 }
