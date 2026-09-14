@@ -17,6 +17,7 @@
 	redir /analog /analog/ 308
 	redir /handwriting /handwriting/ 308
 	redir /dogfight /dogfight/ 308
+	redir /waves /waves/ 308
 
 	handle_path /analog/* {
 		reverse_proxy http://{$ANALOG_UPSTREAM} {
@@ -38,6 +39,15 @@
 
 	handle_path /dogfight/* {
 		reverse_proxy http://{$DOGFIGHT_UPSTREAM} {
+			transport http {
+				dial_timeout 8s
+			}
+			lb_try_duration 12s
+		}
+	}
+
+	handle_path /waves/* {
+		reverse_proxy http://{$WAVE_UPSTREAM} {
 			transport http {
 				dial_timeout 8s
 			}

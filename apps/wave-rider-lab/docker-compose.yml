@@ -1,0 +1,8 @@
+services:
+  wave-rider-lab:
+    build: .
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+    environment:
+      PORT: "8083"

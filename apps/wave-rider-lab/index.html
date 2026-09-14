@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wave Lab — strip-theory seakeeping</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%230c1418' width='64' height='64'/%3E%3Cpath d='M8 36 C16 28 20 44 32 36 S48 28 56 36' fill='none' stroke='%233db8c5' stroke-width='3'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="src/style.css" />
+  </head>
+  <body>
+    <header class="mast">
+      <div class="brand">
+        <span class="mark">∿</span>
+        <div>
+          <p class="eyebrow">Chi3-labs · seakeeping bench</p>
+          <h1>A hull on a stacked sea</h1>
+        </div>
+      </div>
+      <p class="lede">
+        Superpose Gerstner layers into a live surface, then put a strip-theory
+        hull on it. Buoyancy is the submerged geometry — not a canned path —
+        so heave and pitch come from force balance as the boat runs with or
+        against the waves.
+      </p>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab is-on" data-tab="sea" type="button">Sea</button>
+      <button class="tab" data-tab="primer" type="button">Strip theory</button>
+      <button class="tab" data-tab="glossary" type="button">Glossary</button>
+    </nav>
+
+    <main>
+      <section id="panel-sea" class="panel is-on">
+        <div class="scoreboard">
+          <div class="stat">
+            <p class="sub">Sea</p>
+            <p class="big" id="form-pill">Swell</p>
+          </div>
+          <div class="stat">
+            <p class="sub">Significant height</p>
+            <p class="big" id="height-pill">Hs 0.00 m</p>
+          </div>
+          <div class="stat">
+            <p class="sub">Period</p>
+            <p class="big" id="period-pill">T 0.0 s</p>
+          </div>
+          <div class="stat">
+            <p class="sub">Steepness / celerity</p>
+            <p class="big" id="steep-pill">ak 0.00</p>
+          </div>
+          <div class="stat course">
+            <p class="sub">Course</p>
+            <p class="big" id="ship-pill">Against waves · 0.0 kn</p>
+          </div>
+        </div>
+
+        <div id="app" class="wave-open">
+          <div class="stage">
+            <canvas id="viewport"></canvas>
+            <canvas id="viewport-3d" aria-label="3D sea view"></canvas>
+            <button id="dock-backdrop" class="dock-backdrop" type="button" hidden aria-label="Close panels"></button>
+            <header class="hud-top">
+              <div class="hud-actions">
+                <button id="btn-wave-dock" class="active" type="button">Waves</button>
+                <button id="btn-ship-dock" type="button">Ship</button>
+                <button id="btn-pause" type="button">Pause</button>
+                <button id="btn-view" type="button" aria-pressed="false" title="Toggle 3D view">3D</button>
+                <button id="btn-brand" type="button" title="Reset simulation" aria-haspopup="dialog">Reset</button>
+              </div>
+            </header>
+          </div>
+
+          <button class="dock-tab dock-tab-left" id="tab-waves" type="button" aria-expanded="false" aria-controls="wave-dock">Waves</button>
+          <button class="dock-tab dock-tab-right" id="tab-ship" type="button" aria-expanded="false" aria-controls="ship-dock">Ship</button>
+
+          <aside class="dock dock-left" id="wave-dock" aria-label="Wave controls">
+            <div class="dock-head">
+              <h2>Waves</h2>
+              <button id="btn-wave-collapse" class="icon-btn" type="button" title="Close panel" aria-label="Close wave panel">‹</button>
+            </div>
+            <div class="dock-body">
+              <details class="fold" open>
+                <summary>Wave stack</summary>
+                <div class="fold-body">
+                  <div class="layer-list" id="layer-list"></div>
+                  <p class="hint" id="stack-empty">No waveforms yet. Build one below and add it.</p>
+                </div>
+              </details>
+
+              <details class="fold" open>
+                <summary>Waveform</summary>
+                <div class="fold-body">
+                  <p class="editor-mode" id="editor-mode">New waveform</p>
+                  <div class="presets" id="form-starters"></div>
+                  <label class="field">
+                    <span>Name</span>
+                    <input id="wave-name" type="text" maxlength="32" value="Wave" />
+                  </label>
+                  <label class="slider">
+                    <span>Height <em id="amplitude-val">0.00 m</em></span>
+                    <input id="amplitude" type="range" min="0" max="8" step="0.02" value="0" />
+                  </label>
+                  <label class="slider">
+                    <span>Length <em id="wavelength-val">32 m</em></span>
+                    <input id="wavelength" type="range" min="2" max="80" step="0.5" value="32" />
+                  </label>
+                  <label class="slider">
+                    <span>Period <em id="period-val">9.0 s</em></span>
+                    <input id="period" type="range" min="0.6" max="16" step="0.1" value="9" />
+                  </label>
+                  <label class="slider">
+                    <span>Steepness <em id="steepness-val">0.28</em></span>
+                    <input id="steepness" type="range" min="0" max="1.15" step="0.01" value="0.28" />
+                  </label>
+                  <label class="slider">
+                    <span>Break <em id="breaker-val">0%</em></span>
+                    <input id="breaker" type="range" min="0" max="1" step="0.01" value="0" />
+                  </label>
+                  <div class="row">
+                    <button id="btn-add-wave" class="primary" type="button">Add to stack</button>
+                    <button id="btn-new-wave" type="button">New</button>
+                  </div>
+                  <p class="hint">Add stacks this form onto the sea. Click a stack item to edit it here.</p>
+                </div>
+              </details>
+
+              <details class="fold" open>
+                <summary>Weather</summary>
+                <div class="fold-body">
+                  <label class="slider">
+                    <span>Wind <em id="wind-val">0%</em></span>
+                    <input id="wind" type="range" min="0" max="1" step="0.01" value="0" />
+                  </label>
+                  <div class="row">
+                    <button id="btn-wind-back" class="active" type="button">From back</button>
+                    <button id="btn-wind-front" type="button">From front</button>
+                  </div>
+                  <p class="hint">Back follows the swell. Front blows against it and chops the face.</p>
+                </div>
+              </details>
+            </div>
+          </aside>
+
+          <aside class="dock dock-right" id="ship-dock" aria-label="Ship controls">
+            <div class="dock-head">
+              <h2>Ship</h2>
+              <button id="btn-ship-collapse" class="icon-btn" type="button" title="Close panel" aria-label="Close ship panel">›</button>
+            </div>
+            <div class="dock-body">
+              <details class="fold" open>
+                <summary>Hull</summary>
+                <div class="fold-body">
+                  <div class="presets" id="ship-presets"></div>
+                  <label class="slider">
+                    <span>Length <em id="length-val">14.0 m</em></span>
+                    <input id="length" type="range" min="5" max="28" step="0.1" value="14" />
+                  </label>
+                  <label class="slider">
+                    <span>Mass <em id="mass-val">12.0 t</em></span>
+                    <input id="mass" type="range" min="400" max="80000" step="100" value="12000" />
+                  </label>
+                  <label class="slider">
+                    <span>Speed <em id="speed-val">0.0 kn</em></span>
+                    <input id="speed" type="range" min="0" max="31" step="0.5" value="0" />
+                  </label>
+                  <div class="row">
+                    <button id="btn-heading-from" type="button">From waves</button>
+                    <button id="btn-heading-against" class="active" type="button">Against waves</button>
+                  </div>
+                  <label class="slider">
+                    <span>Draft <em id="draft-val">1.35 m</em></span>
+                    <input id="draft" type="range" min="0.25" max="3.4" step="0.05" value="1.35" />
+                  </label>
+                  <label class="slider">
+                    <span>Beam <em id="beam-val">3.4 m</em></span>
+                    <input id="beam" type="range" min="1.2" max="7" step="0.1" value="3.4" />
+                  </label>
+                </div>
+              </details>
+
+              <details class="fold" open>
+                <summary>Section buoyancy</summary>
+                <div class="fold-body">
+                  <label class="slider">
+                    <span>Bow section <em id="bowLift-val">32%</em></span>
+                    <input id="bowLift" type="range" min="0" max="1.2" step="0.01" value="0.32" />
+                  </label>
+                  <label class="slider">
+                    <span>Mid section <em id="midLift-val">55%</em></span>
+                    <input id="midLift" type="range" min="0" max="1.2" step="0.01" value="0.55" />
+                  </label>
+                  <label class="slider">
+                    <span>Stern section <em id="sternLift-val">38%</em></span>
+                    <input id="sternLift" type="range" min="0" max="1.2" step="0.01" value="0.38" />
+                  </label>
+                  <label class="slider">
+                    <span>Damping <em id="damping-val">58%</em></span>
+                    <input id="damping" type="range" min="0.1" max="1.2" step="0.01" value="0.58" />
+                  </label>
+                  <label class="slider">
+                    <span>Pitch inertia <em id="inertiaScale-val">1.00×</em></span>
+                    <input id="inertiaScale" type="range" min="0.4" max="2" step="0.05" value="1" />
+                  </label>
+                  <button id="btn-ship-reset" type="button">Reset run</button>
+                </div>
+              </details>
+
+              <details class="fold" open>
+                <summary>Motion</summary>
+                <div class="fold-body">
+                  <dl class="meters">
+                    <div><dt>Course</dt><dd id="course-val">Against waves</dd></div>
+                    <div><dt>Heave</dt><dd id="heave-val">0.00 m</dd></div>
+                    <div><dt>Pitch</dt><dd id="pitch-val">0.0°</dd></div>
+                    <div><dt>Wetted</dt><dd id="wet-val">0%</dd></div>
+                    <div><dt>Immersion</dt><dd id="sit-val">1.35 m</dd></div>
+                    <div><dt>Trim</dt><dd id="trim-val">+0.00 m</dd></div>
+                    <div><dt>Section buoyancy</dt><dd id="lift-val">0.0 kN</dd></div>
+                  </dl>
+                  <p class="hint">Each slider boosts buoyancy in its zone relative to mid. High bow raises the bow (watch Pitch); high stern raises the stern. Mid is the reference.</p>
+                </div>
+              </details>
+            </div>
+          </aside>
+        </div>
+        <p class="caption">
+          Click the sea to send an impulse. Space pauses; W / S toggle docks; V
+          flips 3D; arrows set heading.
+        </p>
+      </section>
+
+      <section id="panel-primer" class="panel primer">
+        <article>
+          <h2>What the sea is</h2>
+          <p>
+            The surface is kinematic, not a Navier–Stokes solve. Each layer is a
+            Gerstner train: particles orbit so crests sharpen and troughs flatten.
+            Layers sum in world space. Wind chop is a high-frequency overlay;
+            clicks drop localized impulses. The bench samples the line densely
+            each frame so the hull can look up height in O(1).
+          </p>
+          <ol>
+            <li>
+              <strong>Represent.</strong> Wavelength, period, amplitude, and
+              steepness become a parametric surface, not a height map painted by
+              hand.
+            </li>
+            <li>
+              <strong>Stack.</strong> Independent trains add. Gain, mute, and
+              wind direction change the mix without rebuilding the field.
+            </li>
+            <li>
+              <strong>Slice the hull.</strong> Twenty-five stations along the
+              length each see a local waterline and a submerged section.
+            </li>
+            <li>
+              <strong>Integrate.</strong> Heave and pitch follow from net force
+              and moment — buoyancy minus damping — not from a scripted path.
+            </li>
+          </ol>
+        </article>
+        <article>
+          <h2>The teaching model</h2>
+          <pre class="eq">Fᵢ = ρ g Δx · stripArea(beam, depthᵢ)</pre>
+          <p>
+            At station <em>i</em>, submerged depth is the overlap between the
+            local hull section (keel to deck, pitched) and the interpolated wave.
+            Strip area tapers for V-sections. Calibration scales total lift so
+            that, at rest on flat water with the boot stripe on the surface,
+            buoyancy equals weight.
+          </p>
+          <p>
+            Equilibrium solves a small sink offset by bisection and iterates
+            pitch until the moment from the strip forces closes. Time stepping
+            then uses heave <code>(F<sub>y</sub> − c<sub>y</sub> v<sub>y</sub>) / m</code>
+            and pitch <code>(M − c<sub>p</sub> ω<sub>p</sub>) / I</code>, with
+            damping taken from hydrostatic stiffness. Seawater
+            ρ = 1025 kg/m³, g = 9.81 m/s².
+          </p>
+          <h3>Honest limits</h3>
+          <ul>
+            <li>This is a real-time illustration, not CFD or a boundary-element code.</li>
+            <li>The sea does not feel the hull — no radiated or diffracted waves.</li>
+            <li>Section buoyancy sliders are classroom gains, not foil lift tables.</li>
+          </ul>
+          <p>
+            Bench words match the
+            <button class="term-jump" type="button" data-jump="term-gerstner">Glossary</button>:
+            stack, strip, heave, pitch, steepness, heading.
+          </p>
+        </article>
+      </section>
+
+      <section id="panel-glossary" class="panel glossary" aria-label="Glossary">
+        <article id="term-gerstner">
+          <h2>Gerstner sea</h2>
+          <p>
+            A <strong>Gerstner wave</strong> moves water particles in circles (or
+            ellipses). The surface is not a vertical sine: crests peak and
+            troughs stretch. Steepness <em>ak</em> is amplitude times wavenumber.
+            Too steep, and the orbit overlaps — the lab then draws breaking tips.
+          </p>
+          <p>
+            A <strong>stack</strong> is several of these trains, plus optional
+            wind chop and pointer impulses, summed at each sample.
+          </p>
+        </article>
+        <article id="term-strip">
+          <h2>Strip theory</h2>
+          <p>
+            The hull is cut into stations along its length. Each strip has its
+            own submerged area and therefore its own buoyancy. The vertical
+            forces sum to heave; the fore/aft imbalance is pitch moment. Early
+            seakeeping work used the same idea: 2-D sections, not a full 3-D
+            potential.
+          </p>
+        </article>
+        <article id="term-heave">
+          <h2>Heave and pitch</h2>
+          <p>
+            <strong>Heave</strong> is the vertical ride of the center of gravity
+            relative to the still-waterline. <strong>Pitch</strong> is rotation
+            about the beam. <strong>Trim</strong> is the steady bow-up / bow-down
+            offset once the strips have settled. <strong>Immersion</strong> is
+            how deep the keel sits; <strong>wetted</strong> is the fraction of
+            stations still in the water.
+          </p>
+        </article>
+        <article id="term-heading">
+          <h2>Heading</h2>
+          <p>
+            <strong>From waves</strong> runs with the trains (following sea).
+            <strong>Against waves</strong> runs into them (head sea). Encounter
+            speed is wave celerity plus or minus ship speed; the scoreboard
+            reports it as knots on λ when the sea is moving.
+          </p>
+        </article>
+        <article id="term-steep" class="span">
+          <h2>How to read a run</h2>
+          <ol>
+            <li>Open Waves, pick a starter (Swell, Storm, …), Add to stack.</li>
+            <li>Open Ship, pick a hull, set speed and heading.</li>
+            <li>Watch Hs, period, and pitch. Click the sea for a local impulse.</li>
+            <li>Raise bow section buoyancy and see the bow lift; raise stern to squat the bow.</li>
+            <li>
+              3D is the same field on a mesh — not a second physics. Collapse
+              the docks for a clean view.
+            </li>
+          </ol>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Chi3-labs monorepo · illustration model, not a seakeeping certificate ·
+        <a href="/">hub</a> ·
+        <a href="/analog/">χ³ analog lab</a> ·
+        <a href="/handwriting/">handwriting lab</a> ·
+        <a href="/dogfight/">dogfight lab</a>
+      </p>
+    </footer>
+
+    <dialog id="reset-dialog" class="confirm-dialog" aria-labelledby="reset-dialog-title">
+      <p id="reset-dialog-title">Do you want to reset the simulation?</p>
+      <div class="row">
+        <button id="reset-yes" class="primary" type="button">Yes</button>
+        <button id="reset-no" type="button">No</button>
+      </div>
+    </dialog>
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
