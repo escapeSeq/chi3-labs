@@ -21,14 +21,16 @@ def test_health_and_index():
     assert "Dogfight" in page.text
     assert "Hangar" in page.text
     assert "Brain library" in page.text
-    assert "Start burst training" in page.text
-    assert "Stop running training burst" in page.text
+    assert "Burst training off" in page.text
+    assert 'id="burst"' in page.text
+    assert "Start burst training" not in page.text
+    assert "Stop running training burst" not in page.text
     assert "Train this burst" not in page.text
     assert "Graph" in page.text
     assert 'id="winner-read"' in page.text
     assert "red-kills" not in page.text
-    assert 'href="static/styles.css?v=burst-run"' in page.text
-    assert 'src="static/app.js?v=burst-run"' in page.text
+    assert 'href="static/styles.css?v=burst-toggle"' in page.text
+    assert 'src="static/app.js?v=burst-toggle"' in page.text
     js = client.get("/static/app.js")
     assert js.status_code == 200
     assert "red-kills" not in js.text

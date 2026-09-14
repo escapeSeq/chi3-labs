@@ -732,8 +732,13 @@ function burstMilestone(trained) {
 
 function setBurstControls(running) {
   state.bursting = Boolean(running);
-  if ($("burst-start")) $("burst-start").disabled = state.bursting;
-  if ($("burst-stop")) $("burst-stop").disabled = !state.bursting;
+  const btn = $("burst");
+  if (btn) {
+    btn.disabled = false;
+    btn.setAttribute("aria-pressed", state.bursting ? "true" : "false");
+    btn.classList.toggle("is-on", state.bursting);
+    btn.textContent = state.bursting ? "Burst training on" : "Burst training off";
+  }
   if ($("pause")) $("pause").disabled = state.bursting;
 }
 
@@ -795,7 +800,7 @@ function finishBurst(burst) {
   if (shouldResume) resumeFlights();
 }
 
-$("burst-start")?.addEventListener("click", async () => {
+async function startBurst() {
   if (state.bursting) return;
   pauseFlights();
   setBurstControls(true);
@@ -817,10 +822,11 @@ $("burst-start")?.addEventListener("click", async () => {
     $("status").textContent = err.message;
     resumeFlights();
   }
-});
+}
 
-$("burst-stop")?.addEventListener("click", async () => {
-  $("burst-stop").disabled = true;
+async function stopBurst() {
+  const btn = $("burst");
+  if (btn) btn.disabled = true;
   $("status").textContent = "Stopping burst after the current sortie…";
   try {
     const res = await fetch("api/burst/stop", { method: "POST" });
@@ -830,11 +836,18 @@ $("burst-stop")?.addEventListener("click", async () => {
       stopBurstPoll();
       applyStatus(body);
       finishBurst(body);
+    } else if (btn) {
+      btn.disabled = false;
     }
   } catch (err) {
     $("status").textContent = err.message;
-    if (state.bursting) $("burst-stop").disabled = false;
+    if (btn && state.bursting) btn.disabled = false;
   }
+}
+
+$("burst")?.addEventListener("click", () => {
+  if (state.bursting) stopBurst();
+  else startBurst();
 });
 
 document.querySelectorAll("[data-brain-tab]").forEach((button) => {

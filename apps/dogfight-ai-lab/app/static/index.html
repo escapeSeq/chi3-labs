@@ -8,7 +8,7 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%230c1418' width='64' height='64'/%3E%3Cpath d='M12 40 L32 16 L52 40 L32 32 Z' fill='%23e85d4c'/%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="static/styles.css?v=burst-run" />
+    <link rel="stylesheet" href="static/styles.css?v=burst-toggle" />
   </head>
   <body>
     <header class="mast">
@@ -89,8 +89,7 @@
           </div>
           <p class="hint" id="timeout-read">600 s · 12000 steps</p>
         </label>
-        <button id="burst-start" type="button">Start burst training....</button>
-        <button id="burst-stop" class="danger" type="button" disabled>Stop running training burst!</button>
+        <button id="burst" type="button" aria-pressed="false">Burst training off</button>
         <p class="hint" id="burst-read">Burst training is idle.</p>
         <p class="hint" id="status">Flights loop on their own. Empty nets first — expect walls.</p>
         <h3>Learning</h3>
@@ -204,6 +203,6 @@
         <a href="/handwriting/">handwriting lab</a>
       </p>
     </footer>
-    <script src="static/app.js?v=burst-run" type="module"></script>
+    <script src="static/app.js?v=burst-toggle" type="module"></script>
   </body>
 </html>

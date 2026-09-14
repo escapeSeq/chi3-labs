@@ -438,6 +438,11 @@ button {
   color: var(--red);
 }
 
+#burst.is-on {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
 button:disabled {
   opacity: 0.5;
   cursor: wait;
