@@ -1,6 +1,6 @@
-# Chi3-sim
+# Chi3-labs
 
-Monorepo for educational simulations of analog computing and how small
+Monorepo for educational labs on analog computing and how small
 neural nets **train** versus **use** what they learned.
 
 ## Projects
@@ -17,5 +17,5 @@ neural nets **train** versus **use** what they learned.
 docker compose up --build
 ```
 
-Root compose starts both labs. Each subproject also has its own
+Root compose starts all three labs. Each subproject also has its own
 `docker-compose.yml` so it can be started from its own folder.

@@ -5,7 +5,7 @@ mouse-drawn handwriting pad.
 
 ## Run with Docker Compose
 
-From the monorepo root (both labs):
+From the monorepo root (all labs):
 
 ```bash
 docker compose up --build

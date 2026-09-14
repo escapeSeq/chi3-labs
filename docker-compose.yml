@@ -1,4 +1,4 @@
-# Chi3-sim monorepo compose file.
+# Chi3-labs monorepo compose file.
 # From the repository root:
 #   docker compose up --build
 #
