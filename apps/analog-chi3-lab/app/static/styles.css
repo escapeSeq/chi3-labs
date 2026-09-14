@@ -133,7 +133,8 @@ summary {
   display: grid;
 }
 
-.panel.primer.is-on {
+.panel.primer.is-on,
+.panel.glossary.is-on {
   grid-template-columns: 1fr 1fr;
 }
 
@@ -142,6 +143,7 @@ summary {
 .scope,
 .trace,
 .primer article,
+.glossary article,
 .fields figure {
   background: color-mix(in srgb, var(--panel) 88%, black);
   border: 1px solid var(--line);
@@ -206,6 +208,54 @@ footer {
   color: var(--mute);
   font-size: 0.88rem;
   line-height: 1.45;
+}
+
+.help {
+  margin: -0.2rem 0 0.65rem;
+  color: var(--mute);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.term-jump {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pump);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.2rem;
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 88%, black);
+  color: var(--mute);
+  font-size: 0.82rem;
+}
+
+.legend .swatch {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-right: 0.35rem;
+  vertical-align: -0.05rem;
+  border-radius: 50%;
+}
+
+.legend .swatch.teal {
+  background: var(--pump);
+}
+
+.legend .swatch.pink {
+  background: var(--chi);
 }
 
 .stage {
@@ -310,13 +360,52 @@ blockquote {
 }
 
 .primer p,
-.primer li {
+.primer li,
+.glossary p,
+.glossary li,
+.glossary dd {
   color: var(--mute);
   line-height: 1.55;
 }
 
-.primer strong {
+.primer strong,
+.glossary strong {
   color: var(--ink);
+}
+
+.glossary article.span {
+  grid-column: 1 / -1;
+}
+
+.glossary article {
+  scroll-margin-top: 1rem;
+}
+
+.glossary article.is-focus {
+  border-color: var(--pump);
+  box-shadow: 0 0 0 1px var(--pump);
+}
+
+.term-table {
+  margin: 0.6rem 0 0;
+}
+
+.term-table > div {
+  display: grid;
+  gap: 0.2rem;
+  border-top: 1px solid var(--line);
+  padding: 0.55rem 0;
+}
+
+.term-table dt {
+  color: var(--ink);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+
+.term-table dd {
+  margin: 0;
 }
 
 footer {
@@ -334,6 +423,7 @@ footer a {
 
   .scope-row,
   .primer,
+  .glossary,
   .fields {
     grid-template-columns: 1fr;
   }

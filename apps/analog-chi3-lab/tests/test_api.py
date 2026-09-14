@@ -15,6 +15,25 @@ def test_index_served():
     res = client.get("/")
     assert res.status_code == 200
     assert "χ³ Analog Lab" in res.text
+    assert "Glossary" in res.text
+    assert "term-cut" in res.text
+    assert "term-couplings" in res.text
+    assert "Relax both machines" in res.text
+
+
+def test_primer_glossary():
+    res = client.get("/api/primer")
+    assert res.status_code == 200
+    body = res.json()
+    terms = {item["id"]: item["term"] for item in body["glossary"]}
+    assert terms["ising"] == "Ising machine"
+    assert terms["cut"] == "Cut"
+    assert terms["couplings"] == "Couplings / instant"
+    assert terms["oscillators"] == "Oscillators N"
+    assert terms["knobs"] == "Analog χ³ knobs"
+    assert terms["relax"] == "Relax"
+    assert terms["seed"] == "Seed"
+    assert body["how_to_read"]
 
 
 def test_run_endpoint():

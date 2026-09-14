@@ -15,12 +15,25 @@ function fmt(n) {
   return n.toFixed(2);
 }
 
+function showTab(name) {
+  document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("is-on", b.dataset.tab === name));
+  document.querySelectorAll("main .panel").forEach((p) => {
+    p.classList.toggle("is-on", p.id === `panel-${name}`);
+  });
+}
+
 document.querySelectorAll(".tab").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("is-on", b === btn));
-    document.querySelectorAll("main .panel").forEach((p) => {
-      p.classList.toggle("is-on", p.id === `panel-${btn.dataset.tab}`);
-    });
+  btn.addEventListener("click", () => showTab(btn.dataset.tab));
+});
+
+document.querySelectorAll("[data-jump]").forEach((el) => {
+  el.addEventListener("click", () => {
+    showTab("glossary");
+    const target = document.getElementById(el.dataset.jump);
+    if (!target) return;
+    document.querySelectorAll(".glossary article").forEach((card) => card.classList.remove("is-focus"));
+    target.classList.add("is-focus");
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 });
 

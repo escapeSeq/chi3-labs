@@ -110,6 +110,81 @@ def primer() -> dict:
                 "note": "Opposite analog signs across a heavy edge increase the cut.",
             },
         ],
+        "glossary": [
+            {
+                "id": "ising",
+                "term": "Ising machine",
+                "meaning": (
+                    "A classroom Coherent Ising Machine: N analog oscillators whose "
+                    "amplitudes xᵢ settle into spins sᵢ = sign(xᵢ) = ±1. That pattern "
+                    "is a Max-Cut guess. The analog side evaluates every pairwise "
+                    "product at once; a digital walker flips one spin per tick."
+                ),
+            },
+            {
+                "id": "oscillators",
+                "term": "Oscillators N",
+                "meaning": (
+                    "Each node is a continuous amplitude, not a bit. Color is the "
+                    "readout spin; radius is |xᵢ|. N units give a 2^N configuration "
+                    "space that the analog fabric never enumerates."
+                ),
+            },
+            {
+                "id": "cut",
+                "term": "Cut",
+                "meaning": (
+                    "The score: an edge is cut when its endpoints have opposite spins. "
+                    "cut = ¼ Σ Wᵢⱼ (1 − sᵢ sⱼ). Cut ceiling is the sum of all edge "
+                    "weights — every edge cut, often impossible. Higher is better."
+                ),
+            },
+            {
+                "id": "couplings",
+                "term": "Couplings / instant",
+                "meaning": (
+                    "A coupling is one pairwise product Jᵢⱼ xⱼ. An analog instant is "
+                    "one time sample of the ODE, in which all N² couplings fire together. "
+                    "Analog couplings/instant is N²; digital updates are one spin flip "
+                    "per tick."
+                ),
+            },
+            {
+                "id": "knobs",
+                "term": "Analog χ³ knobs",
+                "meaning": (
+                    "ODE parameters, not the graph. Pump ramp end p drives saturation. "
+                    "Coupling ξ scales Jx. Analog noise η is a Brownian kick that can "
+                    "help escape shallow cuts."
+                ),
+            },
+            {
+                "id": "relax",
+                "term": "Relax",
+                "meaning": (
+                    "Run the analog pump ramp and the digital walker, then compare cuts. "
+                    "Analog relaxation is physical settling: explore at low pump, then "
+                    "χ³ saturation locks amplitudes toward ±1."
+                ),
+            },
+            {
+                "id": "seed",
+                "term": "Seed",
+                "meaning": (
+                    "Random seed for the graph. Same Problem + N + Seed draws the same "
+                    "instance. Analog starts from seed+11 and the digital walker from "
+                    "seed+3, so they share the problem, not the same initial draw."
+                ),
+            },
+        ],
+        "how_to_read": [
+            "Pick a problem and N, optionally a seed.",
+            "Open Analog χ³ knobs to change pump, coupling, or noise.",
+            "Hit Relax both machines.",
+            "Watch analog nodes grow and flip color; digital nodes flip one at a time.",
+            "Compare analog best cut vs digital best cut vs cut ceiling.",
+            "Volume meters count arithmetic: analog pays N² couplings every instant.",
+        ],
         "caveats": [
             "Analog machines do not magically solve NP-hard problems in O(1).",
             "Noise, precision, and embedding still matter; this lab is a teaching model.",

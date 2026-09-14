@@ -33,56 +33,86 @@
       <button class="tab is-on" data-tab="ising" type="button">Ising machine</button>
       <button class="tab" data-tab="field" type="button">Kerr field slab</button>
       <button class="tab" data-tab="primer" type="button">Why analog volume</button>
+      <button class="tab" data-tab="glossary" type="button">Glossary</button>
     </nav>
 
     <main>
       <section id="panel-ising" class="panel is-on">
         <aside class="rack">
           <h2>Optical bench</h2>
+          <p class="help">
+            Same Max-Cut graph, two solvers: analog oscillators settle together;
+            the digital walker flips one spin per tick.
+            <button class="term-jump" type="button" data-jump="term-ising">What is an Ising machine?</button>
+          </p>
           <label>
             Problem
-            <select id="kind">
+            <select id="kind" title="Which graph the oscillators and the walker both try to cut.">
               <option value="planted_cut">Planted Max-Cut (known communities)</option>
               <option value="erdos_renyi">Random dense graph</option>
               <option value="ring_chords">Ring with chords</option>
               <option value="frustrated_grid">Grid (local couplings)</option>
             </select>
           </label>
+          <p class="help">
+            Planted Max-Cut hides two communities with many crossing edges, so a
+            strong cut exists. The other graphs do not plant one.
+          </p>
           <label>
             Oscillators N
-            <input id="n" type="range" min="8" max="80" value="28" />
+            <input id="n" type="range" min="8" max="80" value="28" title="Number of analog oscillators — also the number of spins." />
             <span id="n-readout">28</span>
           </label>
+          <p class="help">
+            Each node is a continuous amplitude xᵢ, not a bit. Search space is 2<sup>N</sup>.
+            <button class="term-jump" type="button" data-jump="term-oscillators">Oscillators</button>
+          </p>
           <label>
             Seed
-            <input id="seed" type="number" value="7" min="0" max="9999" />
+            <input id="seed" type="number" value="7" min="0" max="9999" title="Random seed for the graph. Same problem + N + seed draws the same instance." />
           </label>
+          <p class="help">
+            Rebuilds the random graph. Analog and digital share the instance, not the same starting spins.
+            <button class="term-jump" type="button" data-jump="term-seed">Seed</button>
+          </p>
           <label>
             Digital walker
-            <select id="digital-method">
+            <select id="digital-method" title="Sequential baseline: one spin update per digital tick.">
               <option value="metropolis">Metropolis (one flip / tick)</option>
               <option value="greedy">Greedy local search</option>
               <option value="brute">Brute force (N ≤ 18)</option>
             </select>
           </label>
+          <p class="help">Metropolis may accept a worse flip. Greedy never does. Brute enumerates (N ≤ 18).</p>
           <details>
             <summary>Analog χ³ knobs</summary>
+            <p class="help">
+              Physics of the analog ODE, not the graph.
+              <button class="term-jump" type="button" data-jump="term-knobs">Knobs</button>
+            </p>
             <label>
               Pump ramp end
-              <input id="pump" type="range" min="0.6" max="2.2" step="0.05" value="1.35" />
+              <input id="pump" type="range" min="0.6" max="2.2" step="0.05" value="1.35" title="Final pump p. Starts low so the fabric explores, then saturates." />
             </label>
+            <p class="help">How hard the oscillators are driven. Too low: they never lock. Too high: they saturate before a good cut forms.</p>
             <label>
               Coupling ξ
-              <input id="coupling" type="range" min="0.05" max="0.7" step="0.01" value="0.22" />
+              <input id="coupling" type="range" min="0.05" max="0.7" step="0.01" value="0.22" title="Strength of analog coupling ξ Jx." />
             </label>
+            <p class="help">How strongly each oscillator feels every other. Too small: they ignore the graph. Too large: they overshoot.</p>
             <label>
               Analog noise
-              <input id="noise" type="range" min="0" max="0.15" step="0.005" value="0.035" />
+              <input id="noise" type="range" min="0" max="0.15" step="0.005" value="0.035" title="Brownian kick η added each analog instant." />
             </label>
+            <p class="help">A little noise helps escape shallow cuts. Too much, and the readout jitters.</p>
           </details>
           <div class="actions">
-            <button id="run" class="primary" type="button">Relax both machines</button>
+            <button id="run" class="primary" type="button" title="Run the analog pump ramp and the digital walker on the same graph.">Relax both machines</button>
             <p class="hint" id="status">Idle · load a graph and fire the pump.</p>
+            <p class="help">
+              Relaxation is analog settling: amplitudes grow, saturate, and read out as ±1 spins.
+              <button class="term-jump" type="button" data-jump="term-relax">Relax</button>
+            </p>
           </div>
         </aside>
 
@@ -109,6 +139,11 @@
               </p>
             </article>
           </div>
+          <p class="legend" aria-label="Graph legend">
+            <span><i class="swatch teal"></i> spin +1 / edge cut</span>
+            <span><i class="swatch pink"></i> spin −1 / edge uncut</span>
+            <span>Radius on the analog pane is |xᵢ|. Yellow ring marks the digital bit being updated.</span>
+          </p>
           <article class="trace">
             <header>
               <h3>Oscilloscope · cut quality vs computational effort</h3>
@@ -124,14 +159,53 @@
         <aside class="meters">
           <h2>Volume</h2>
           <dl id="metrics">
-            <div><dt>Configuration space</dt><dd id="m-space">—</dd></div>
-            <div><dt>Analog couplings / instant</dt><dd id="m-pair">—</dd></div>
-            <div><dt>Equivalent serial analog ops</dt><dd id="m-serial">—</dd></div>
-            <div><dt>Digital updates</dt><dd id="m-digital">—</dd></div>
-            <div><dt>Analog best cut</dt><dd id="m-acut">—</dd></div>
-            <div><dt>Digital best cut</dt><dd id="m-dcut">—</dd></div>
-            <div><dt>Cut ceiling (all edges)</dt><dd id="m-max">—</dd></div>
+            <div>
+              <dt title="Number of binary spin assignments, 2^N.">Configuration space</dt>
+              <dd id="m-space">—</dd>
+            </div>
+            <div>
+              <dt title="N² pairwise products Jx evaluated together in one analog time sample.">
+                Analog couplings / instant
+              </dt>
+              <dd id="m-pair">—</dd>
+            </div>
+            <div>
+              <dt title="Couplings plus local χ³ ops, times the number of analog steps.">
+                Equivalent serial analog ops
+              </dt>
+              <dd id="m-serial">—</dd>
+            </div>
+            <div>
+              <dt title="How many single-spin flips or holds the digital walker performed.">
+                Digital updates
+              </dt>
+              <dd id="m-digital">—</dd>
+            </div>
+            <div>
+              <dt title="Highest cut value the analog fabric reached during the pump ramp.">
+                Analog best cut
+              </dt>
+              <dd id="m-acut">—</dd>
+            </div>
+            <div>
+              <dt title="Highest cut value the digital walker reached.">
+                Digital best cut
+              </dt>
+              <dd id="m-dcut">—</dd>
+            </div>
+            <div>
+              <dt title="Sum of all edge weights — every edge cut, often impossible.">
+                Cut ceiling (all edges)
+              </dt>
+              <dd id="m-max">—</dd>
+            </div>
           </dl>
+          <p class="help">
+            Cut is the score: opposite spins across an edge add that edge’s weight.
+            <button class="term-jump" type="button" data-jump="term-cut">Cut</button>
+            ·
+            <button class="term-jump" type="button" data-jump="term-couplings">Couplings / instant</button>
+          </p>
           <blockquote id="lesson">
             Run the lab to watch analog volume compete with sequential search.
           </blockquote>
@@ -249,6 +323,176 @@
             <li>Embedding a problem onto physical couplings is itself work.</li>
             <li>NP-hard problems stay NP-hard; analog volume is a throughput story, not a complexity-class collapse.</li>
           </ul>
+          <p>
+            Bench controls, meters, and the
+            <button class="term-jump" type="button" data-jump="term-ising">Glossary</button>
+            use the same words: oscillator, cut, coupling, instant, knob, relax, seed.
+          </p>
+        </article>
+      </section>
+
+      <section id="panel-glossary" class="panel glossary" aria-label="Glossary">
+        <article id="term-ising">
+          <h2>Ising machine</h2>
+          <p>
+            A classroom <strong>Coherent Ising Machine (CIM)</strong>: N analog
+            oscillators whose amplitudes xᵢ settle into a binary pattern
+            sᵢ = sign(xᵢ) = ±1. That pattern is a guess at a Max-Cut of the graph.
+            A digital walker solves the same graph by flipping one spin per tick.
+            The analog side does every pairwise product at once.
+          </p>
+          <pre class="eq">ẋᵢ = (p − 1) xᵢ − xᵢ³ + ξ Σⱼ Jᵢⱼ xⱼ + η</pre>
+          <ul>
+            <li><strong>(p − 1) xᵢ</strong> — pump / gain. Below threshold amplitudes die; as p ramps up they grow.</li>
+            <li><strong>−xᵢ³</strong> — the χ³ Kerr / saturation term. It clamps amplitudes and pushes each unit toward + or −.</li>
+            <li><strong>ξ Σⱼ Jᵢⱼ xⱼ</strong> — analog coupling: every oscillator feels every other in one shot.</li>
+            <li><strong>η</strong> — analog noise.</li>
+          </ul>
+          <p>
+            Minimizing Ising energy H = ½ sᵀ W s is the same as maximizing cut, so
+            the analog coupling matrix is J = −W.
+          </p>
+        </article>
+        <article id="term-oscillators">
+          <h2>Oscillators N</h2>
+          <p>
+            Each node is one <strong>oscillator</strong>, not a bit. It has a
+            continuous amplitude xᵢ (optical field, voltage, or current). Color
+            on the graph is the readout spin sign(xᵢ); radius is |xᵢ|.
+          </p>
+          <p>
+            N is how many units you wire up. The search space is 2<sup>N</sup>
+            binary assignments. The analog fabric never enumerates them: the N
+            amplitudes evolve together. Default N = 28 is already about 268
+            million configurations. Brute force is only offered for N ≤ 18.
+          </p>
+        </article>
+        <article id="term-cut">
+          <h2>Cut</h2>
+          <p>
+            <strong>Cut</strong> is the score. Partition the nodes into two teams
+            (+1 and −1). An edge is cut when its two ends are on different teams:
+          </p>
+          <pre class="eq">cut = ¼ Σᵢⱼ Wᵢⱼ (1 − sᵢ sⱼ)</pre>
+          <p>
+            Opposite signs (sᵢ sⱼ = −1) add the edge weight. Same signs add
+            nothing. <strong>Cut ceiling</strong> is “every edge cut,”
+            Σ<sub>i&lt;j</sub> wᵢⱼ — often impossible, because cutting one edge
+            can force another not to be cut.
+          </p>
+          <p>
+            Teal edges are currently cut; pink edges are uncut. The oscilloscope
+            plots cut vs effort. Higher cut is better. Analog best cut and
+            digital best cut are the highest values each solver reached on this run.
+          </p>
+        </article>
+        <article id="term-couplings">
+          <h2>Couplings / instant</h2>
+          <p>
+            A <strong>coupling</strong> is one pairwise product Jᵢⱼ xⱼ — how much
+            oscillator j pulls oscillator i. Digitally that is an N×N
+            matrix–vector multiply, issued in a loop. In the analog story, the
+            interconnect <em>is</em> that multiply: every product happens in the
+            same physical moment.
+          </p>
+          <p>
+            An <strong>instant</strong> is one analog time sample of the ODE
+            (one Euler step in this simulator). In that instant all N oscillators
+            update, all N² couplings Jx fire, plus a few local χ³ ops per
+            oscillator.
+          </p>
+          <p>
+            <strong>Analog couplings / instant</strong> is therefore N².
+            <strong>Equivalent serial analog ops</strong> is that volume times
+            the number of analog steps (~420). <strong>Digital updates</strong>
+            is how many single-spin flips the walker got in the same run.
+            NP-hard stays NP-hard; analog media can dump a huge number of
+            products into one physical instant.
+          </p>
+        </article>
+        <article id="term-knobs">
+          <h2>Analog χ³ knobs</h2>
+          <p>These are the analog ODE parameters, not the graph.</p>
+          <dl class="term-table">
+            <div>
+              <dt>Pump ramp end p</dt>
+              <dd>
+                How hard you drive the oscillators. Pump starts negative (−0.55)
+                and ramps to this value. Too low: they never saturate. Too high:
+                they slam to ± before the couplings can organize a good cut.
+              </dd>
+            </div>
+            <div>
+              <dt>Coupling ξ</dt>
+              <dd>
+                How strongly each oscillator feels Jx. Too small: units ignore
+                the graph. Too large: the analog state can overshoot or lock
+                into a mediocre pattern. Default 0.22.
+              </dd>
+            </div>
+            <div>
+              <dt>Analog noise η</dt>
+              <dd>
+                Brownian kick each instant. A little noise helps escape shallow
+                cuts. Too much, and the readout jitters and the cut suffers.
+              </dd>
+            </div>
+          </dl>
+        </article>
+        <article id="term-relax">
+          <h2>Relax</h2>
+          <p>
+            <strong>Relax both machines</strong> means: let the analog network
+            run its pump ramp, and let the digital walker take its sequential
+            steps, then compare cuts.
+          </p>
+          <p>
+            Analog <strong>relaxation</strong> is physical settling. Early in the
+            ramp (p low), amplitudes are small and noisy — exploration. As pump
+            rises, χ³ saturation locks each unit toward ±, and the couplings
+            pull the whole pattern toward a deep cut. You read the answer; you
+            do not search the 2<sup>N</sup> list.
+          </p>
+          <p>
+            Digital methods are not relaxing in that sense. Metropolis tries one
+            flip per tick and may accept a worse cut (simulated annealing).
+            Greedy only accepts an improving flip. Brute enumerates, with
+            global-flip symmetry removed.
+          </p>
+        </article>
+        <article id="term-seed">
+          <h2>Seed</h2>
+          <p>
+            <strong>Seed</strong> is the random-number seed that builds the
+            graph (which edges exist, their weights, planted communities) and
+            also offsets the analog and digital initial conditions.
+          </p>
+          <p>
+            Same Problem + N + Seed draws the same instance, so analog vs digital
+            is a fair fight. Change the seed to draw a new random graph of that
+            kind. Analog starts from seed+11 and the digital walker from seed+3,
+            so they share the problem, not the exact same initial draw.
+          </p>
+        </article>
+        <article id="term-read" class="span">
+          <h2>How to read a run</h2>
+          <ol>
+            <li>Pick a problem and N, optionally a seed.</li>
+            <li>Open Analog χ³ knobs if you want to change pump, coupling, or noise.</li>
+            <li>Hit <strong>Relax both machines</strong>.</li>
+            <li>Watch analog nodes grow and flip color as they saturate; digital nodes flip one at a time.</li>
+            <li>Compare Analog best cut vs Digital best cut vs Cut ceiling.</li>
+            <li>
+              Volume meters tell you how much arithmetic happened: analog paid N²
+              couplings every instant; digital paid one spin flip per tick.
+            </li>
+          </ol>
+          <p>
+            The graph is the problem, oscillators are the hardware, couplings are
+            the all-at-once multiply, cut is the score, knobs are the analog
+            physics, seed is which random instance, and relax is “run until the
+            analog fabric settles.”
+          </p>
         </article>
       </section>
     </main>
