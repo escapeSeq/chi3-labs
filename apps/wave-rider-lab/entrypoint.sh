@@ -1,8 +1,7 @@
 #!/bin/sh
-# Bind nginx to PORT on IPv4 and IPv6. Railway private networking is IPv6;
-# healthchecks and Docker Compose still use IPv4.
+# PORT is expanded by Caddy from the environment. Keep this wrapper so
+# Windows CRLF cannot sneak into the image CMD, and so we log the bind.
 set -eu
 PORT="${PORT:-8083}"
-sed -i "s/listen \[::\]:80;/listen [::]:${PORT};/" /etc/nginx/nginx.conf
-sed -i "s/listen 80;/listen ${PORT};/" /etc/nginx/nginx.conf
-exec nginx -g "daemon off;"
+echo "wave-rider-lab listening on ${PORT} (IPv4 and IPv6)"
+exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile

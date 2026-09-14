@@ -58,4 +58,5 @@ On Railway (behind the monorepo proxy):
 - Do **not** generate a public domain here. The `proxy` service is the
   public entry; this lab is reached at `/waves/` over private networking.
 - Set `PORT=8083` as a **service variable** and leave the start command
-  empty so nginx listens on `$PORT` (IPv4 and IPv6).
+  empty so Caddy listens on `$PORT` (IPv4 and IPv6). The proxy reaches
+  this lab at `/waves/` over Railway's private IPv6 network.

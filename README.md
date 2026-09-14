@@ -57,6 +57,6 @@ Railway service names match this table.
 Leave each service's start command empty so the Dockerfiles run. The Python
 lab images bind dual-stack (`--host ''`) so Railway's private IPv6 network can
 reach them; IPv4-only `0.0.0.0` makes the hub work and every `/analog/`,
-`/handwriting/`, `/dogfight/`, `/waves/` URL 502. The wave lab nginx image
-listens on IPv4 and IPv6. Do not put `VOLUME` in the dogfight
+`/handwriting/`, `/dogfight/`, `/waves/` URL 502. The wave lab Caddy image
+listens on `$PORT` (IPv4 and IPv6). Do not put `VOLUME` in the dogfight
 Dockerfile; mount the Railway volume at `/data`, never `/app` or `/lab`.

@@ -7,11 +7,13 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/nginx.conf
+# Caddy binds dual-stack on :$PORT (IPv4 + IPv6). Railway private
+# networking is IPv6; Docker Compose healthchecks still use IPv4.
+FROM caddy:2-alpine
+COPY --from=build /app/dist /srv
+COPY Caddyfile /etc/caddy/Caddyfile
 COPY entrypoint.sh /entrypoint.sh
-RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /etc/caddy/Caddyfile /entrypoint.sh && chmod +x /entrypoint.sh
 
 ENV PORT=8083
 EXPOSE 8083
