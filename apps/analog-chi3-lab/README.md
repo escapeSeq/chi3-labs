@@ -19,7 +19,9 @@ Or from this directory:
 docker compose up --build
 ```
 
-Open [http://localhost:8080](http://localhost:8080).
+Open [http://localhost:8080](http://localhost:8080) from this folder, or
+[http://localhost:8080/analog/](http://localhost:8080/analog/) from the
+monorepo root (through the proxy).
 
 ## Run without Docker
 

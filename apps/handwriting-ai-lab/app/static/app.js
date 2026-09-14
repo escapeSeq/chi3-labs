@@ -172,7 +172,7 @@ $("keep").addEventListener("click", async () => {
   }
   $("keep").disabled = true;
   try {
-    const res = await fetch("/api/example", {
+    const res = await fetch("api/example", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pixels: readGrid(), label: state.label }),
@@ -198,7 +198,7 @@ $("train").addEventListener("click", async () => {
   $("train").disabled = true;
   $("train-status").textContent = "The classroom is being read again and again…";
   try {
-    const res = await fetch("/api/train", {
+    const res = await fetch("api/train", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ epochs: Number($("epochs").value), lr: 0.28 }),
@@ -215,7 +215,7 @@ $("train").addEventListener("click", async () => {
 });
 
 $("forget").addEventListener("click", async () => {
-  await fetch("/api/reset-model", { method: "POST" });
+  await fetch("api/reset-model", { method: "POST" });
   state.lastTrain = null;
   state.templates = null;
   $("train-status").textContent = "Weights scrambled. Run a lesson before asking it to read well.";
@@ -234,7 +234,7 @@ async function inferNow() {
   }
   const grid = readGrid();
   paintSees(grid);
-  const res = await fetch("/api/infer", {
+  const res = await fetch("api/infer", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ pixels: grid }),
@@ -422,7 +422,7 @@ async function boot() {
   paintLoss([]);
   paintNet(zeros(), null, 0);
   setMode("teach");
-  const stateRes = await fetch("/api/state");
+  const stateRes = await fetch("api/state");
   const snap = await stateRes.json();
   fillCounts(snap.counts, snap.examples);
 }

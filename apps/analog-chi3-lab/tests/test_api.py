@@ -19,6 +19,8 @@ def test_index_served():
     assert "term-cut" in res.text
     assert "term-couplings" in res.text
     assert "Relax both machines" in res.text
+    assert 'href="static/styles.css"' in res.text
+    assert 'src="static/app.js"' in res.text
 
 
 def test_primer_glossary():

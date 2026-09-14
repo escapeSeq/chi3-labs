@@ -175,7 +175,7 @@ async function pushTimeout() {
   const seconds = timeoutSeconds();
   setTimeoutSeconds(seconds);
   try {
-    const res = await fetch("/api/timeout", {
+    const res = await fetch("api/timeout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ seconds }),
@@ -272,7 +272,7 @@ async function pushPlanes() {
   const n = planeCount();
   setPlaneCount(n);
   try {
-    const res = await fetch("/api/planes", {
+    const res = await fetch("api/planes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ n }),
@@ -305,7 +305,7 @@ async function pushMode() {
   const mode = $("mode")?.value === "hunt" ? "hunt" : "ffa";
   setFightMode(mode);
   try {
-    const res = await fetch("/api/mode", {
+    const res = await fetch("api/mode", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mode }),
@@ -660,7 +660,7 @@ function readRosterForm() {
 async function pushRoster() {
   const payload = readRosterForm();
   try {
-    const res = await fetch("/api/roster", {
+    const res = await fetch("api/roster", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -678,7 +678,7 @@ async function pushRoster() {
 
 async function reviseBrain(id, seat) {
   try {
-    const res = await fetch(`/api/brains/${id}/revise`, {
+    const res = await fetch(`api/brains/${id}/revise`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(seat == null ? {} : { seat }),
@@ -697,7 +697,7 @@ async function reviseBrain(id, seat) {
 
 async function dropBrain(id) {
   try {
-    const res = await fetch(`/api/brains/${id}`, { method: "DELETE" });
+    const res = await fetch(`api/brains/${id}`, { method: "DELETE" });
     const body = await res.json();
     if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Could not delete brain");
     if (state.inspectId === id) state.inspectId = null;
@@ -710,7 +710,7 @@ async function dropBrain(id) {
 
 async function wipeBrain(id) {
   try {
-    const res = await fetch(`/api/brains/${id}/wipe`, { method: "POST" });
+    const res = await fetch(`api/brains/${id}/wipe`, { method: "POST" });
     const body = await res.json();
     if (!res.ok) throw new Error(body.detail || "Wipe failed");
     applyStatus(body);
@@ -751,14 +751,14 @@ function startBurstPoll() {
 
 async function pollBurst() {
   try {
-    const burst = await (await fetch("/api/burst")).json();
+    const burst = await (await fetch("api/burst")).json();
     const trained = Number(burst.trained || 0);
     const mark = burstMilestone(trained);
     if (mark >= BURST_REPORT && mark !== state.burstShown) {
       state.burstShown = mark;
       text("burst-read", `Burst training · ${mark.toLocaleString()} sorties`);
       $("status").textContent = `Burst training running · ${mark.toLocaleString()} sorties.`;
-      const snap = await (await fetch("/api/state")).json();
+      const snap = await (await fetch("api/state")).json();
       applyStatus(snap);
     } else if (!state.burstShown) {
       text("burst-read", "Burst training · 0 sorties");
@@ -787,7 +787,7 @@ function finishBurst(burst) {
     ? burst.error
     : `Stopped burst training after ${trained.toLocaleString()} sorties. Continuous flights resume.`;
   if (trained) {
-    fetch("/api/state")
+    fetch("api/state")
       .then((res) => res.json())
       .then((snap) => applyStatus(snap))
       .catch(() => {});
@@ -803,7 +803,7 @@ $("burst-start")?.addEventListener("click", async () => {
   text("burst-read", "Burst training · 0 sorties");
   $("status").textContent = "Burst training started. Counter updates every 10,000 sorties.";
   try {
-    const res = await fetch("/api/burst/start", {
+    const res = await fetch("api/burst/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ lr: 0.018, seconds: timeoutSeconds() }),
@@ -823,7 +823,7 @@ $("burst-stop")?.addEventListener("click", async () => {
   $("burst-stop").disabled = true;
   $("status").textContent = "Stopping burst after the current sortie…";
   try {
-    const res = await fetch("/api/burst/stop", { method: "POST" });
+    const res = await fetch("api/burst/stop", { method: "POST" });
     const body = await res.json();
     if (!res.ok) throw new Error(body.detail || "Burst stop failed");
     if (!body.running) {
@@ -1151,7 +1151,7 @@ async function flyNext(loopId) {
   if (state.bursting || !state.running || loopId !== state.loopId || state.busy) return;
   state.busy = true;
   try {
-    const res = await fetch("/api/sortie", { method: "POST" });
+    const res = await fetch("api/sortie", { method: "POST" });
     const body = await res.json();
     if (!res.ok) throw new Error(body.detail || "Sortie failed");
     if (!state.running || loopId !== state.loopId) {
@@ -1321,7 +1321,7 @@ function paintChart(curve) {
 }
 
 async function boot() {
-  const snap = await (await fetch("/api/state")).json();
+  const snap = await (await fetch("api/state")).json();
   applyStatus(snap);
   if (snap.physics?.timeout != null) setTimeoutSeconds(snap.physics.timeout);
   if (snap.physics?.n_planes != null) setPlaneCount(snap.physics.n_planes);

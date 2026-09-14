@@ -11,7 +11,7 @@ From the monorepo root (all labs):
 docker compose up --build
 ```
 
-Then open [http://localhost:8081](http://localhost:8081).
+Then open [http://localhost:8080/handwriting/](http://localhost:8080/handwriting/).
 
 Or from this directory:
 
@@ -19,7 +19,7 @@ Or from this directory:
 docker compose up --build
 ```
 
-## Run without Docker
+Open [http://localhost:8081](http://localhost:8081).
 
 ```bash
 python -m pip install -r requirements.txt

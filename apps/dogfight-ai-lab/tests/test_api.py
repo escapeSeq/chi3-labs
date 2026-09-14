@@ -27,6 +27,8 @@ def test_health_and_index():
     assert "Graph" in page.text
     assert 'id="winner-read"' in page.text
     assert "red-kills" not in page.text
+    assert 'href="static/styles.css?v=burst-run"' in page.text
+    assert 'src="static/app.js?v=burst-run"' in page.text
     js = client.get("/static/app.js")
     assert js.status_code == 200
     assert "red-kills" not in js.text

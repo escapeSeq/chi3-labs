@@ -15,6 +15,8 @@ def test_health_and_index():
     page = client.get("/")
     assert page.status_code == 200
     assert "Handwriting" in page.text
+    assert 'href="static/styles.css"' in page.text
+    assert 'src="static/app.js"' in page.text
 
 
 def test_add_example_and_infer():

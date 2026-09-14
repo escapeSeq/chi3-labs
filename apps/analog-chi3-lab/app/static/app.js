@@ -71,7 +71,7 @@ $("run").addEventListener("click", async () => {
         seed: Number($("seed").value) + 3,
       },
     };
-    const res = await fetch("/api/run", {
+    const res = await fetch("api/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -107,7 +107,7 @@ $("run-field").addEventListener("click", async () => {
   $("run-field").disabled = true;
   $("field-status").textContent = "Propagating through the analog slab…";
   try {
-    const res = await fetch("/api/field", {
+    const res = await fetch("api/field", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

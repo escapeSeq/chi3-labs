@@ -12,7 +12,7 @@ From the monorepo root:
 docker compose up --build
 ```
 
-Then open [http://localhost:8082](http://localhost:8082).
+Then open [http://localhost:8080/dogfight/](http://localhost:8080/dogfight/).
 
 Or from this directory:
 
@@ -20,7 +20,7 @@ Or from this directory:
 docker compose up --build
 ```
 
-## Run without Docker
+Open [http://localhost:8082](http://localhost:8082).
 
 ```bash
 python -m pip install -r requirements.txt
@@ -53,12 +53,14 @@ Policies, revisions, hangar seats, and the scoreboard are stored on
 zero wins and the learning chart without touching weights. Wipe all brains
 to scramble weights and keep names and seats.
 
-On Railway:
+On Railway (behind the monorepo proxy):
 
-- Set the service **Root Directory** to `apps/dogfight-ai-lab` (the folder
+- Set this service **Root Directory** to `apps/dogfight-ai-lab` (the folder
   with `Dockerfile` and `requirements.txt`, not the inner `app/` package).
-- Leave the start command empty so the Dockerfile/`Procfile` can run
-  uvicorn on `$PORT`.
+- Do **not** generate a public domain here. The `proxy` service is the
+  public entry; this lab is reached at `/dogfight/` over private networking.
+- Set `PORT=8082` and leave the start command empty so the Dockerfile can
+  run uvicorn on `$PORT`.
 - Do not put `VOLUME` in the Dockerfile. Attach a **Railway Volume** with
   mount path `/data` — never `/app` or `/lab`, or the volume will hide the
   installed code and you will see `ModuleNotFoundError: numpy`.

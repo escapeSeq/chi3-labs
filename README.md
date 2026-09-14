@@ -3,13 +3,14 @@
 Monorepo for educational labs on analog computing and how small
 neural nets **train** versus **use** what they learned.
 
-## Projects
+A Caddy proxy sits in front of the labs so they share one origin:
 
-| Path | What it is | How to run |
-| --- | --- | --- |
-| [`apps/analog-chi3-lab`](apps/analog-chi3-lab) | Analog Ising / CIM relaxation vs sequential digital search, plus a Kerr field slab | `docker compose up --build` → http://localhost:8080 |
-| [`apps/handwriting-ai-lab`](apps/handwriting-ai-lab) | Handwriting classroom: mouse-drawn digits, training loop, then frozen inference | `docker compose up --build` → http://localhost:8081 |
-| [`apps/dogfight-ai-lab`](apps/dogfight-ai-lab) | Two empty policies learn a 2-D turn-radius gun fight by trial and error | `docker compose up --build` → http://localhost:8082 |
+| Path | Project |
+| --- | --- |
+| [`/`](proxy) | Lab directory |
+| [`/analog/`](apps/analog-chi3-lab) | Analog Ising / CIM relaxation vs sequential digital search, plus a Kerr field slab |
+| [`/handwriting/`](apps/handwriting-ai-lab) | Handwriting classroom: mouse-drawn digits, training loop, then frozen inference |
+| [`/dogfight/`](apps/dogfight-ai-lab) | Empty policies learn a 2-D turn-radius gun fight by trial and error |
 
 ## Quick start
 
@@ -17,5 +18,30 @@ neural nets **train** versus **use** what they learned.
 docker compose up --build
 ```
 
-Root compose starts all three labs. Each subproject also has its own
-`docker-compose.yml` so it can be started from its own folder.
+Then open [http://localhost:8080](http://localhost:8080). Each subproject
+also has its own `docker-compose.yml` so it can be started from its own
+folder without the proxy.
+
+## Railway
+
+Deploy **four services** from this repo. Only the proxy should have a
+public domain; the labs talk to it over Railway private networking.
+
+| Service name | Root directory | Public | Notes |
+| --- | --- | --- | --- |
+| `analog-chi3-lab` | `apps/analog-chi3-lab` | no | Set `PORT=8080` |
+| `handwriting-ai-lab` | `apps/handwriting-ai-lab` | no | Set `PORT=8081` |
+| `dogfight-ai-lab` | `apps/dogfight-ai-lab` | no | Set `PORT=8082`. Attach a volume at `/data` |
+| `proxy` | `proxy` | yes | Generate the public domain here |
+
+On the **proxy** service:
+
+| Variable | Value |
+| --- | --- |
+| `ANALOG_UPSTREAM` | `${{analog-chi3-lab.RAILWAY_PRIVATE_DOMAIN}}:${{analog-chi3-lab.PORT}}` |
+| `HANDWRITING_UPSTREAM` | `${{handwriting-ai-lab.RAILWAY_PRIVATE_DOMAIN}}:${{handwriting-ai-lab.PORT}}` |
+| `DOGFIGHT_UPSTREAM` | `${{dogfight-ai-lab.RAILWAY_PRIVATE_DOMAIN}}:${{dogfight-ai-lab.PORT}}` |
+
+Leave each service's start command empty so the Dockerfiles run. Do not
+put `VOLUME` in the dogfight Dockerfile; mount the Railway volume at
+`/data`, never `/app` or `/lab`.

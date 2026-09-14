@@ -2,40 +2,60 @@
 # From the repository root:
 #   docker compose up --build
 #
-# Analog lab:        http://localhost:8080
-# Handwriting lab:   http://localhost:8081
-# Dogfight lab:      http://localhost:8082
+# Hub:               http://localhost:8080
+# Analog lab:        http://localhost:8080/analog/
+# Handwriting lab:   http://localhost:8080/handwriting/
+# Dogfight lab:      http://localhost:8080/dogfight/
 
 services:
   analog-chi3-lab:
     build:
       context: ./apps/analog-chi3-lab
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     restart: unless-stopped
     environment:
       PYTHONUNBUFFERED: "1"
+      PORT: "8080"
 
   handwriting-ai-lab:
     build:
       context: ./apps/handwriting-ai-lab
-    ports:
-      - "8081:8081"
+    expose:
+      - "8081"
     restart: unless-stopped
     environment:
       PYTHONUNBUFFERED: "1"
+      PORT: "8081"
 
   dogfight-ai-lab:
     build:
       context: ./apps/dogfight-ai-lab
-    ports:
-      - "8082:8082"
+    expose:
+      - "8082"
     restart: unless-stopped
     environment:
       PYTHONUNBUFFERED: "1"
+      PORT: "8082"
       DOGFIGHT_DATA: /data
     volumes:
       - dogfight-brains:/data
+
+  proxy:
+    build:
+      context: ./proxy
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      ANALOG_UPSTREAM: analog-chi3-lab:8080
+      HANDWRITING_UPSTREAM: handwriting-ai-lab:8081
+      DOGFIGHT_UPSTREAM: dogfight-ai-lab:8082
+    depends_on:
+      - analog-chi3-lab
+      - handwriting-ai-lab
+      - dogfight-ai-lab
 
 volumes:
   dogfight-brains:
