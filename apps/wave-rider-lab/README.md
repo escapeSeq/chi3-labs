@@ -20,7 +20,7 @@ Or from this directory:
 docker compose up --build
 ```
 
-Open [http://localhost:8083](http://localhost:8083).
+Open [http://localhost:8080](http://localhost:8080).
 
 ## Run without Docker
 
@@ -39,7 +39,7 @@ Production layout, same as the other labs:
 npm install
 npm run build
 python -m pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8083
+uvicorn app.main:app --host 0.0.0.0 --port 8080
 ```
 
 ## What it teaches
@@ -73,5 +73,5 @@ On Railway (behind the monorepo proxy):
 - Set this service **Root Directory** to `apps/wave-rider-lab`.
 - Do **not** generate a public domain here. The `proxy` service is the
   public entry; this lab is reached at `/waves/` over private networking.
-- Set `PORT=8083` as a **service variable** and leave the start command
+- Set `PORT=8080` as a **service variable** and leave the start command
   empty so uvicorn listens on `$PORT` (IPv4 and IPv6).

@@ -46,7 +46,7 @@ export WAVE_UPSTREAM
 ANALOG_UPSTREAM="$(normalize_upstream "${ANALOG_UPSTREAM:-}" analog-chi3-lab 8080)"
 HANDWRITING_UPSTREAM="$(normalize_upstream "${HANDWRITING_UPSTREAM:-}" handwriting-ai-lab 8081)"
 DOGFIGHT_UPSTREAM="$(normalize_upstream "${DOGFIGHT_UPSTREAM:-}" dogfight-ai-lab 8082)"
-WAVE_UPSTREAM="$(normalize_upstream "${WAVE_UPSTREAM:-}" wave-rider-lab 8083)"
+WAVE_UPSTREAM="$(normalize_upstream "${WAVE_UPSTREAM:-}" wave-rider-lab 8080)"
 
 echo "chi3-labs proxy upstreams:"
 echo "  analog      ${ANALOG_UPSTREAM}"

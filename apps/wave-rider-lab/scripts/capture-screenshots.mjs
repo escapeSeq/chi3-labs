@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.join(__dirname, "..", "docs", "screenshots");
-const baseUrl = process.env.WAVE_RIDER_URL ?? "http://localhost:8083";
+const baseUrl = process.env.WAVE_RIDER_URL ?? "http://localhost:8080";
 const freshUrl = baseUrl.replace(/[#?].*$/, "");
 
 async function waitForCanvas(page) {

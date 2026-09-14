@@ -2,8 +2,7 @@ services:
   wave-rider-lab:
     build: .
     ports:
-      - "8083:8083"
+      - "8080:8080"
     restart: unless-stopped
     environment:
       PYTHONUNBUFFERED: "1"
-      PORT: "8083"

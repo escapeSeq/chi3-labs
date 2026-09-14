@@ -46,11 +46,11 @@ services:
     build:
       context: ./apps/wave-rider-lab
     expose:
-      - "8083"
+      - "8080"
     restart: unless-stopped
     environment:
       PYTHONUNBUFFERED: "1"
-      PORT: "8083"
+      PORT: "8080"
 
   proxy:
     build:
@@ -63,7 +63,7 @@ services:
       ANALOG_UPSTREAM: analog-chi3-lab:8080
       HANDWRITING_UPSTREAM: handwriting-ai-lab:8081
       DOGFIGHT_UPSTREAM: dogfight-ai-lab:8082
-      WAVE_UPSTREAM: wave-rider-lab:8083
+      WAVE_UPSTREAM: wave-rider-lab:8080
     depends_on:
       - analog-chi3-lab
       - handwriting-ai-lab
