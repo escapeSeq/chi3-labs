@@ -7,15 +7,18 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# Caddy binds dual-stack on :$PORT (IPv4 + IPv6). Railway private
-# networking is IPv6; Docker Compose healthchecks still use IPv4.
-FROM caddy:2-alpine
-COPY --from=build /app/dist /srv
-COPY Caddyfile /etc/caddy/Caddyfile
-COPY entrypoint.sh /entrypoint.sh
-RUN sed -i 's/\r$//' /etc/caddy/Caddyfile /entrypoint.sh && chmod +x /entrypoint.sh
+FROM python:3.12-slim
+WORKDIR /lab
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+COPY --from=build /app/app/static ./app/static
 
 ENV PORT=8083
 EXPOSE 8083
 
-ENTRYPOINT ["/entrypoint.sh"]
+# Empty --host binds IPv4 and IPv6. Railway private networking is IPv6;
+# healthchecks and Docker Compose still use IPv4.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host '' --port ${PORT:-8083}"]

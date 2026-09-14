@@ -22,16 +22,24 @@ docker compose up --build
 
 Open [http://localhost:8083](http://localhost:8083).
 
+## Run without Docker
+
+Frontend (Vite, hot reload):
+
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Production build:
+Open [http://localhost:5173](http://localhost:5173).
+
+Production layout, same as the other labs:
 
 ```bash
+npm install
 npm run build
-npm run preview
+python -m pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8083
 ```
 
 ## What it teaches
@@ -52,11 +60,18 @@ This is a real-time illustration, not CFD. The sea does not feel the hull
 (no radiated or diffracted waves). Section buoyancy sliders are classroom
 gains, not foil tables. Constants: seawater ρ = 1025 kg/m³, g = 9.81 m/s².
 
+## Tests
+
+```bash
+python -m pip install -r requirements-dev.txt
+npm run build
+python -m pytest
+```
+
 On Railway (behind the monorepo proxy):
 
 - Set this service **Root Directory** to `apps/wave-rider-lab`.
 - Do **not** generate a public domain here. The `proxy` service is the
   public entry; this lab is reached at `/waves/` over private networking.
 - Set `PORT=8083` as a **service variable** and leave the start command
-  empty so Caddy listens on `$PORT` (IPv4 and IPv6). The proxy reaches
-  this lab at `/waves/` over Railway's private IPv6 network.
+  empty so uvicorn listens on `$PORT` (IPv4 and IPv6).
