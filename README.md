@@ -34,7 +34,7 @@ public domain; the labs talk to it over Railway private networking.
 
 | Service name | Root directory | Public | Notes |
 | --- | --- | --- | --- |
-| `nonlinear-physics-lab` | `apps/nonlinear-physics-lab` | no | Set `PORT=8084` |
+| `nonlinear-physics-lab` | `apps/nonlinear-physics-lab` | no | Set `PORT=8080` |
 | `analog-chi3-lab` | `apps/analog-chi3-lab` | no | Set `PORT=8080` |
 | `handwriting-ai-lab` | `apps/handwriting-ai-lab` | no | Set `PORT=8081` |
 | `dogfight-ai-lab` | `apps/dogfight-ai-lab` | no | Set `PORT=8082`. Attach a volume at `/data` |
@@ -43,8 +43,7 @@ public domain; the labs talk to it over Railway private networking.
 | `proxy` | `proxy` | yes | Generate the public domain here |
 
 `PORT` on each lab must be a **service variable** in the Railway dashboard
-(8080 for analog and waves, 8081 handwriting, 8082 dogfight, 8083 swarm,
-8084 physics). `${{service.PORT}}`
+(8080 for analog, physics, and waves, 8081 handwriting, 8082 dogfight, 8083 swarm). `${{service.PORT}}`
 does not pick up the runtime `PORT` Railway injects, so the proxy would get
 `host:` and return 502.
 

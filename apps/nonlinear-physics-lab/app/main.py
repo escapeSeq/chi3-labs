@@ -17,6 +17,7 @@ app = FastAPI(
     title="Nonlinear Analog Physics Lab",
     description="Educational simulation of χ¹ / χ² / χ³ analog media.",
     version="0.1.0",
+    redirect_slashes=False,
 )
 
 
@@ -259,8 +260,11 @@ def run_saturate(req: SaturateRequest) -> dict:
 
 
 @app.get("/")
+@app.get("/physics")
+@app.get("/physics/")
 def index() -> FileResponse:
     return FileResponse(STATIC / "index.html")
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+app.mount("/physics/static", StaticFiles(directory=STATIC), name="physics-static")

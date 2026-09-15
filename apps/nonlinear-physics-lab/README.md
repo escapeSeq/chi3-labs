@@ -24,7 +24,7 @@ Or from this directory:
 docker compose up --build
 ```
 
-Open [http://localhost:8084](http://localhost:8084) from this folder, or
+Open [http://localhost:8080](http://localhost:8080) from this folder, or
 [http://localhost:8080/physics/](http://localhost:8080/physics/) from the
 monorepo root (through the proxy).
 
@@ -32,7 +32,7 @@ monorepo root (through the proxy).
 
 ```bash
 python -m pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8084
+uvicorn app.main:app --host 0.0.0.0 --port 8080
 ```
 
 ## What it teaches

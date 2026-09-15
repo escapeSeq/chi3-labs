@@ -15,11 +15,11 @@ services:
     build:
       context: ./apps/nonlinear-physics-lab
     expose:
-      - "8084"
+      - "8080"
     restart: unless-stopped
     environment:
       PYTHONUNBUFFERED: "1"
-      PORT: "8084"
+      PORT: "8080"
 
   analog-chi3-lab:
     build:
@@ -85,7 +85,7 @@ services:
     restart: unless-stopped
     environment:
       PORT: "8080"
-      PHYSICS_UPSTREAM: nonlinear-physics-lab:8084
+      PHYSICS_UPSTREAM: nonlinear-physics-lab:8080
       ANALOG_UPSTREAM: analog-chi3-lab:8080
       HANDWRITING_UPSTREAM: handwriting-ai-lab:8081
       DOGFIGHT_UPSTREAM: dogfight-ai-lab:8082

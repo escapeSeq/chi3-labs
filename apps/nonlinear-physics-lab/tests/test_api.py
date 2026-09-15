@@ -15,6 +15,9 @@ def test_index_served():
     res = client.get("/")
     assert res.status_code == 200
     assert "Nonlinear Physics Lab" in res.text
+    res_prefixed = client.get("/physics/")
+    assert res_prefixed.status_code == 200
+    assert "Nonlinear Physics Lab" in res_prefixed.text
     assert "Glossary" in res.text
     assert "term-superposition" in res.text
     assert "term-kerr" in res.text
