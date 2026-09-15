@@ -83,6 +83,11 @@ export function createShip(preset = "yacht") {
     sit: 0,
     trim: 0,
     liftSum: 0,
+    fold: 0,
+    hog: 0,
+    damage: 0,
+    broken: false,
+    _prevDepth: null,
   };
 }
 
@@ -110,6 +115,11 @@ export function resetShipMotion(ship, viewWidth = 68, points = null) {
   ship.sit = sitDepth(ship);
   ship.trim = 0;
   ship.liftSum = 0;
+  ship.fold = 0;
+  ship.hog = 0;
+  ship.damage = 0;
+  ship.broken = false;
+  ship._prevDepth = null;
   if (points?.ys || points?.length) {
     const { waveY } = sampleHullSea(ship, points);
     const hull = ensureHullCache(ship);
@@ -240,6 +250,18 @@ function cgX(ship) {
   return -ship.length * 0.025;
 }
 
+export function foldPoint(lx, ly, fold) {
+  if (!fold) return { x: lx, y: ly };
+  const th = (lx >= 0 ? -1 : 1) * fold;
+  const c = Math.cos(th);
+  const s = Math.sin(th);
+  return { x: lx * c - ly * s, y: lx * s + ly * c };
+}
+
+function hullGirderStrength(ship) {
+  return ship.mass * G * Math.max(1, ship.length) * (0.11 + 0.035 * Math.max(0.4, ship.inertiaScale));
+}
+
 function displacementVolume(ship) {
   return ship.mass / (RHO * BLOCK);
 }
@@ -350,6 +372,16 @@ function hydroForces(ship, waveY, y, pitch, hull, gains, waveYForScale = null) {
   const xcg = cgX(ship);
   const weight = ship.mass * G;
   const scale = buoyancyScale(ship, hull, waveYForScale);
+  const fold = ship.fold || 0;
+  const wSlice = weight / STATIONS;
+  if (!ship._sliceForce || ship._sliceForce.length !== STATIONS) {
+    ship._sliceForce = new Float64Array(STATIONS);
+  }
+  if (!ship._sliceDepth || ship._sliceDepth.length !== STATIONS) {
+    ship._sliceDepth = new Float64Array(STATIONS);
+  }
+  const sliceForce = ship._sliceForce;
+  const sliceDepths = ship._sliceDepth;
   let buoyancy = 0;
   let moment = 0;
   let wet = 0;
@@ -360,14 +392,21 @@ function hydroForces(ship, waveY, y, pitch, hull, gains, waveYForScale = null) {
   const liftForces = [0, 0, 0];
 
   for (let i = 0; i < STATIONS; i += 1) {
-    const lx = hull.lx[i];
-    const depth = sliceDepth(waveY[i], y, pitch, lx, hull.keel[i], hull.deck[i]);
-    if (depth < 0.006) continue;
+    const posed = foldPoint(hull.lx[i], hull.keel[i], fold);
+    const deck = foldPoint(hull.lx[i], hull.deck[i], fold);
+    const lx = posed.x;
+    const depth = sliceDepth(waveY[i], y, pitch, lx, posed.y, deck.y);
+    sliceDepths[i] = depth;
+    if (depth < 0.006) {
+      sliceForce[i] = 0;
+      continue;
+    }
 
     const base = scale * RHO * G * dx * stripArea(ship.beam, depth, hull.keel[i], hull.deck[i]);
     const gain = gains[i];
     const force = base * gain;
     const extra = force - base;
+    sliceForce[i] = force;
 
     buoyancy += force;
     moment += force * (lx - xcg);
@@ -385,6 +424,11 @@ function hydroForces(ship, waveY, y, pitch, hull, gains, waveYForScale = null) {
     }
   }
 
+  let hogMoment = 0;
+  for (let i = 0; i < STATIONS; i += 1) {
+    hogMoment += Math.max(0, wSlice - sliceForce[i]) * Math.abs(hull.lx[i]);
+  }
+
   return {
     Fy: buoyancy - weight,
     M: moment,
@@ -393,6 +437,8 @@ function hydroForces(ship, waveY, y, pitch, hull, gains, waveYForScale = null) {
     trim: bowDepth - sternDepth,
     liftSum,
     liftForces,
+    hogMoment,
+    depths: sliceDepths,
   };
 }
 
@@ -477,8 +523,25 @@ export function stepShip(ship, sea, field, dt) {
   for (let i = 0; i < STATIONS; i += 1) waveVyMid += waveVy[i];
   waveVyMid /= STATIONS;
 
+  const mid = (STATIONS - 1) >> 1;
+  const hogGeom = waveY[mid] - 0.5 * (waveY[0] + waveY[STATIONS - 1]);
+  const perched = hogGeom > Math.max(0.22, ship.draft * 0.28);
   const steps = dt > 0.012 ? 3 : 2;
   const subDt = dt / steps;
+  const prevDepth = ship._prevDepth;
+
+  const posed = hydroForces(ship, waveY, ship.y, ship.pitch, hull, gains);
+  let slam = 0;
+  if (prevDepth && posed.depths) {
+    const dx = ship.length / (STATIONS - 1);
+    for (let i = 0; i < STATIONS; i += 1) {
+      const depth = posed.depths[i];
+      if (prevDepth[i] >= 0.03 || depth <= 0.04) continue;
+      const rel = ship.vy - waveVy[i];
+      if (rel >= -0.7) continue;
+      slam += 0.5 * RHO * ship.beam * dx * rel * rel;
+    }
+  }
 
   for (let step = 0; step < steps; step += 1) {
     const hydro = hydroStiffness(ship, waveY, ship.y, ship.pitch, hull, gains);
@@ -488,7 +551,7 @@ export function stepShip(ship, sea, field, dt) {
     const cP = 2 * zetaP * Math.sqrt(I * kP);
     const relVy = ship.vy - waveVyMid;
 
-    ship.vy += ((hydro.Fy - cY * relVy) / m) * subDt;
+    ship.vy += ((hydro.Fy + slam - cY * relVy) / m) * subDt;
     ship.vp += ((hydro.M - cP * ship.vp) / I) * subDt;
     ship.y += ship.vy * subDt;
     ship.pitch += ship.vp * subDt;
@@ -497,17 +560,34 @@ export function stepShip(ship, sea, field, dt) {
   const wetNow = hydroForces(ship, waveY, ship.y, ship.pitch, hull, gains).wet;
   if (wetNow > 0.2) {
     const wet = Math.min(1, wetNow * 1.25);
-    const blend = Math.min(0.48, 3.6 * dt) * wet;
+    const glue = perched ? 0.12 : 1;
+    const blend = Math.min(0.48, 3.6 * dt) * wet * glue;
     const yEq = solveFlotationY(ship, waveY, ship.pitch, hull, gains);
     const pitchEq = quickPitchEquilibrium(ship, waveY, ship.y, ship.pitch, hull, gains);
     ship.y += (yEq - ship.y) * blend;
     ship.vy += (waveVyMid - ship.vy) * blend * 0.45;
-    ship.pitch += (pitchEq - ship.pitch) * blend * 0.85;
+    ship.pitch += (pitchEq - ship.pitch) * blend * (perched ? 0.25 : 0.85);
     ship.vp *= 1 - blend * 0.35;
   }
 
   const report = hydroForces(ship, waveY, ship.y, ship.pitch, hull, gains);
-  ship.pitch = Math.max(-0.4, Math.min(0.4, ship.pitch));
+  const ult = hullGirderStrength(ship);
+  const hog = (report.hogMoment + Math.max(0, hogGeom) * ship.mass * G * 0.08) / Math.max(1, ult);
+  ship.hog = hog;
+  if (hog > 1) {
+    ship.damage = Math.min(1, ship.damage + (hog - 1) * dt * 2.6);
+  } else if (!ship.broken && ship.damage < 0.18) {
+    ship.damage = Math.max(0, ship.damage - dt * 0.05);
+  }
+  if (ship.damage > 0.4) ship.broken = true;
+  const elastic = Math.max(0, hog) * 0.05;
+  const plastic = ship.damage * 0.78;
+  const targetFold = Math.min(1.12, elastic + plastic);
+  ship.fold += (targetFold - ship.fold) * Math.min(1, 5.2 * dt);
+  if (!ship._prevDepth) ship._prevDepth = new Float64Array(STATIONS);
+  if (report.depths) ship._prevDepth.set(report.depths);
+
+  ship.pitch = Math.max(-0.55, Math.min(0.55, ship.pitch));
   ship.heave = ship.y;
   ship.wet = report.wet;
   ship.sit = report.sit;

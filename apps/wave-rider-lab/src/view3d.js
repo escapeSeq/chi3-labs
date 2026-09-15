@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import { sampleSurfaceXZ } from "./wave.js";
-import { hullRings } from "./ship.js";
+import { foldPoint, hullRings } from "./ship.js";
 
 const SEA_NX = 96;
 const SEA_NZ = 40;
-const SPRAY_MAX = 260;
+const SPRAY_MAX = 420;
 const WATER_FACE = new THREE.Color(0x152026);
 const WATER_CREST = new THREE.Color(0x3db8c5);
 const WATER_FOAM = new THREE.Color(0xe7efe6);
@@ -247,7 +247,7 @@ function updateSea(mesh, field, ship) {
       positions.setXYZ(i, displayX - originX, y, z);
       const lift = 0.5 + 0.5 * Math.tanh(y * 0.55);
       COLOR.copy(WATER_FACE).lerp(WATER_CREST, 0.2 + lift * 0.8);
-      if (sample.break > 0.18) COLOR.lerp(WATER_FOAM, Math.min(1, sample.break));
+      if (sample.break > 0.12) COLOR.lerp(WATER_FOAM, Math.min(1, 0.25 + sample.break));
       colors.setXYZ(i, COLOR.r, COLOR.g, COLOR.b);
     }
   }
@@ -301,7 +301,9 @@ function makeHullMesh(ship) {
     vertexColors: true,
     side: THREE.DoubleSide,
   });
-  return new THREE.Mesh(geometry, material);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.userData.bindPos = new Float32Array(positions);
+  return mesh;
 }
 
 function capRing(ring, startIndex, bow, positions, colors, indices) {
@@ -337,6 +339,7 @@ function makeCabinMesh(ship) {
   const material = new THREE.MeshLambertMaterial({ color: 0xd8c4a4 });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(cabin.x, cabin.y, cabin.z);
+  mesh.userData.bind = { x: cabin.x, y: cabin.y, z: cabin.z };
   return mesh;
 }
 
@@ -348,6 +351,36 @@ function updateShip(group, ship) {
   group.rotation.y = ship.heading >= 0 ? 0 : Math.PI;
   group.rotation.z = ship.pitch;
   group.visible = ship.visible !== false;
+
+  const fold = ship.fold || 0;
+  const hull = group.children[0];
+  const bind = hull?.userData?.bindPos;
+  if (hull && bind) {
+    const pos = hull.geometry.getAttribute("position");
+    if (Math.abs(fold) < 1e-4) {
+      if (hull.userData.folded) {
+        pos.array.set(bind);
+        pos.needsUpdate = true;
+        hull.userData.folded = false;
+      }
+    } else {
+      const n = bind.length / 3;
+      for (let i = 0; i < n; i += 1) {
+        const p = foldPoint(bind[i * 3], bind[i * 3 + 1], fold);
+        pos.setXYZ(i, p.x, p.y, bind[i * 3 + 2]);
+      }
+      pos.needsUpdate = true;
+      hull.userData.folded = true;
+    }
+  }
+
+  const cabin = group.children[1];
+  const cabinBind = cabin?.userData?.bind;
+  if (cabin && cabinBind) {
+    const p = foldPoint(cabinBind.x, cabinBind.y, fold);
+    cabin.position.set(p.x, p.y, cabinBind.z);
+    cabin.rotation.z = fold;
+  }
 }
 
 function makeSprayPoints() {

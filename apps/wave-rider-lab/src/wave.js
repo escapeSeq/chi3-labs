@@ -103,6 +103,7 @@ export function createField() {
     impulses: [],
     spray: [],
     spawnCarry: 0,
+    _peakAmp: 0,
   };
 }
 
@@ -187,7 +188,12 @@ export function addImpulse(field, x, amp = 0.32) {
   if (field.impulses.length > 8) field.impulses.shift();
 }
 
+export function windDir(field) {
+  return field.weather?.from === "front" ? -1 : 1;
+}
+
 export function stepField(field, dt) {
+  field._peakAmp = peakAmplitude(field);
   if (field.paused) return;
   field.time += dt;
   field.impulses = field.impulses.filter((imp) => field.time - imp.t0 < 12);
@@ -201,19 +207,37 @@ function hash(n) {
 
 function gerstner(x0, t, wavelength, period, amplitude, steepness, stokes, dir = 1) {
   if (amplitude <= 0 || wavelength <= 0 || period <= 0) {
-    return { x: x0, y: 0, theta: 0 };
+    return { x: x0, y: 0, theta: 0, dx0: 1, dy0: 0 };
   }
 
   const k = TWO_PI / wavelength;
   const omega = TWO_PI / period;
   const theta = dir * k * x0 - omega * t;
   const Q = Math.min(steepness, 0.78);
+  const s = Math.sin(theta);
+  const c = Math.cos(theta);
+  const dth = dir * k;
 
   return {
-    x: x0 - dir * Q * amplitude * Math.sin(theta),
-    y: amplitude * Math.cos(theta) + stokes * amplitude * 0.2 * Math.cos(2 * theta),
+    x: x0 - dir * Q * amplitude * s,
+    y: amplitude * c + stokes * amplitude * 0.2 * Math.cos(2 * theta),
     theta,
+    dx0: 1 - Q * amplitude * k * c,
+    dy0: -amplitude * s * dth - stokes * amplitude * 0.4 * Math.sin(2 * theta) * dth,
   };
+}
+
+function clamp01(v) {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+function windExposure(slope, y, peakAmp, dir) {
+  const A = Math.max(0.12, peakAmp);
+  const slopeN = slope / Math.max(0.18, A * 0.55);
+  const windward = clamp01(0.5 + 0.62 * dir * slopeN);
+  const crest = clamp01((y / A - 0.12) / 0.72);
+  const lee = 1 - windward;
+  return clamp01(0.16 + 0.58 * windward + 0.48 * crest - 0.5 * lee * (1 - crest)) * (1.05 + 0.2 * crest);
 }
 
 function wrapAngle(theta) {
@@ -285,6 +309,8 @@ function sampleLayer(params, x0, t) {
     y: primary.y + spill.y,
     vy: layerVerticalVelocity(params, x0, t, 1),
     break: spill.amount,
+    dx0: primary.dx0,
+    dy0: primary.dy0,
   };
 }
 
@@ -320,13 +346,16 @@ export function sampleSurfaceVelocity(field, x0) {
   return vy;
 }
 
-function sampleWeather(field, x0) {
+function sampleWeather(field, x0, swellSlope, swellY, peakAmp) {
   const strength = field.weather?.strength ?? 0;
-  if (strength < 0.02) return { x: 0, y: 0 };
-  const dir = field.weather.from === "front" ? -1 : 1;
-  const A = 0.08 + strength * 0.9;
+  if (strength < 0.02) return { x: 0, y: 0, dy0: 0, dx0: 0, expose: 0 };
+  const dir = windDir(field);
+  const expose = windExposure(swellSlope, swellY, peakAmp, dir);
+  const A = (0.08 + strength * 0.95) * (0.2 + 0.85 * expose);
   let x = 0;
   let y = 0;
+  let dy0 = 0;
+  let dx0 = 0;
   for (const train of CHOP_TRAINS) {
     const chop = gerstner(
       x0,
@@ -334,20 +363,49 @@ function sampleWeather(field, x0) {
       Math.max(1.4, 18 * train.ratio),
       Math.max(0.45, 4.2 * train.ratio),
       A * train.amp,
-      0.2 + strength * 0.25,
+      0.22 + strength * 0.32 * expose,
       0.08,
       dir * train.dir
     );
     x += chop.x - x0;
     y += chop.y;
+    dy0 += chop.dy0;
+    dx0 += chop.dx0 - 1;
   }
-  return { x, y };
+  const grit = (hash(x0 * 9.4 + field.time * 7.2) - 0.5) * 2;
+  y += expose * strength * 0.05 * grit;
+  return { x, y, dy0, dx0, expose };
+}
+
+function ripCrest(field, x0, y, slope, peakAmp, foam0, expose) {
+  const wind = field.weather?.strength ?? 0;
+  const A = Math.max(0.08, peakAmp);
+  const dir = windDir(field);
+  const slopeN = slope / Math.max(0.18, A * 0.55);
+  const nearCrest = clamp01((y / A - 0.42) / 0.5);
+  const localSteep = Math.abs(slope) > 0.58 ? 0.22 : 0;
+  const drive = wind * (0.5 + 0.5 * (expose || 0)) + foam0 * 0.45 + localSteep * nearCrest;
+  if (drive < 0.035 || nearCrest < 0.04) return { dx: 0, dy: 0, foam: 0 };
+
+  const hold = 0.9 - drive * 0.48;
+  const excess = Math.max(0, y - A * hold);
+  const tear = drive * nearCrest * Math.exp(-slopeN * slopeN * 1.6);
+  const rip = Math.min(A * 0.62, excess * (0.5 + wind * 0.85) + tear * A * 0.28);
+  if (rip < 0.004) return { dx: 0, dy: 0, foam: tear };
+
+  return {
+    dy: -rip,
+    dx: dir * rip * (0.4 + 0.7 * (expose || nearCrest)),
+    foam: Math.min(1, rip / (A * 0.18) + tear),
+  };
 }
 
 export function sampleSurface(field, x0) {
   let x = x0;
   let y = 0;
   let brk = 0;
+  let dy0 = 0;
+  let dx0 = 1;
 
   for (const layer of field.layers) {
     if (!layer.enabled || layer.gain <= 0) continue;
@@ -355,6 +413,8 @@ export function sampleSurface(field, x0) {
     x += (sample.x - x0) * layer.gain;
     y += sample.y * layer.gain;
     brk = Math.max(brk, sample.break * layer.gain);
+    dy0 += sample.dy0 * layer.gain;
+    dx0 += (sample.dx0 - 1) * layer.gain;
   }
 
   if (!selectedLayer(field) && field.preview) {
@@ -362,17 +422,29 @@ export function sampleSurface(field, x0) {
     x += sample.x - x0;
     y += sample.y;
     brk = Math.max(brk, sample.break);
+    dy0 += sample.dy0;
+    dx0 += sample.dx0 - 1;
   }
 
-  const weather = sampleWeather(field, x0);
+  const peakAmp = field._peakAmp ?? peakAmplitude(field);
+  const swellSlope = dy0 / Math.max(0.25, dx0);
+  const weather = sampleWeather(field, x0, swellSlope, y, peakAmp);
   x += weather.x;
   y += weather.y;
+  dy0 += weather.dy0;
+  dx0 += weather.dx0;
 
   for (const imp of field.impulses) {
     y += impulseLift(imp, x0, field.time);
   }
 
-  return { x, y, break: brk };
+  const slope = dy0 / Math.max(0.25, dx0);
+  const rip = ripCrest(field, x0, y, slope, peakAmp, brk, weather.expose);
+  x += rip.dx;
+  y += rip.dy;
+  brk = Math.max(brk, rip.foam);
+
+  return { x, y, break: brk, slope, expose: weather.expose || 0 };
 }
 
 export function sampleSurfaceXZ(field, x0, z0) {
@@ -392,6 +464,7 @@ export function sampleSurfaceXZ(field, x0, z0) {
 }
 
 export function sampleLine(field, count) {
+  field._peakAmp = peakAmplitude(field);
   const points = new Array(count);
   const ys = new Float64Array(count);
   const vys = new Float64Array(count);
@@ -408,7 +481,7 @@ export function sampleLine(field, count) {
     const x0 = (i / (count - 1)) * viewWidth;
     const xSea = x0 + scroll;
     const sample = sampleSurface(field, xSea);
-    points[i] = { x: x0, y: sample.y, break: sample.break };
+    points[i] = { x: x0, y: sample.y, break: sample.break, slope: sample.slope, expose: sample.expose };
     ys[i] = sample.y;
     vys[i] = sampleSurfaceVelocity(field, xSea);
     if (sample.y < minY) minY = sample.y;
@@ -464,7 +537,24 @@ function collectTips(field) {
       const tipSea = (omega * t + TWO_PI * n) / k + p.wavelength * 0.035;
       if (tipSea < scroll - 2 || tipSea > scroll + viewWidth + 2) continue;
       const point = sampleSurface(field, tipSea);
-      tips.push({ x: tipSea, y: point.y, intensity: power });
+      tips.push({ x: tipSea, y: point.y, intensity: power, slope: point.slope || 0 });
+    }
+  }
+
+  const wind = field.weather?.strength ?? 0;
+  if (wind > 0.04) {
+    const n = 56;
+    const dir = windDir(field);
+    const peak = Math.max(0.2, field._peakAmp || 0.2);
+    for (let i = 0; i < n; i += 1) {
+      const xSea = scroll + (i / (n - 1)) * viewWidth;
+      const point = sampleSurface(field, xSea);
+      const climb = dir * (point.slope || 0);
+      const torn = point.break > 0.1 || (point.y > 0.18 * peak && climb > -0.08);
+      if (!torn) continue;
+      const intensity = Math.max(point.break, wind * (0.28 + 0.55 * (point.expose || 0)));
+      if (intensity < 0.08) continue;
+      tips.push({ x: xSea, y: point.y, intensity, slope: point.slope || 0 });
     }
   }
 
@@ -473,23 +563,28 @@ function collectTips(field) {
 
 function stepSpray(field, dt) {
   const tips = collectTips(field);
-  const A = Math.max(0.2, peakAmplitude(field));
+  const A = Math.max(0.2, field._peakAmp || peakAmplitude(field));
   const wind = field.weather?.strength ?? 0;
-  field.spawnCarry += dt * (tips.reduce((sum, tip) => sum + 14 + tip.intensity * 38, 0) + wind * 24);
+  const dir = windDir(field);
+  const windU = dir * (1.2 + wind * 16);
+  field.spawnCarry += dt * (tips.reduce((sum, tip) => sum + 16 + tip.intensity * 52, 0) + wind * 38);
 
-  while (field.spawnCarry >= 1 && field.spray.length < 260) {
+  while (field.spawnCarry >= 1 && field.spray.length < 420) {
     field.spawnCarry -= 1;
     const tip = tips[Math.floor(hash(field.time * 80 + field.spawnCarry * 9) * tips.length)] || tips[0];
     if (!tip) break;
-    const throwFwd =
-      (field.weather?.from === "front" ? -1 : 1) * (1.6 + hash(tip.x * 3.1 + field.time) * 3.4);
-    const throwUp = (hash(tip.y * 5.7 + field.time * 2.2) - 0.28) * 2.8;
+    const slope = tip.slope || 0;
+    const mag = Math.sqrt(1 + slope * slope);
+    const along = (2.2 + wind * 9) * tip.intensity;
+    const tx = (dir / mag) * along;
+    const ty = ((dir * slope) / mag) * along;
+    const loft = (hash(tip.y * 5.7 + field.time * 2.2) - 0.18) * (1.6 + wind * 2.4) * tip.intensity;
     field.spray.push({
       x: tip.x + (hash(field.time + tip.x) - 0.35) * A * 0.12,
-      y: tip.y + (hash(field.time * 1.7 + tip.y) - 0.55) * A * 0.06,
-      vx: throwFwd * tip.intensity * Math.sqrt(A),
-      vy: throwUp * tip.intensity * Math.sqrt(A),
-      life: 0.28 + hash(tip.x + field.time) * 0.55,
+      y: tip.y + (hash(field.time * 1.7 + tip.y) - 0.35) * A * 0.05,
+      vx: tx + (hash(tip.x * 3.1 + field.time) - 0.35) * 2.2,
+      vy: ty + loft * Math.sqrt(A),
+      life: 0.32 + hash(tip.x + field.time) * 0.7 + wind * 0.25,
       age: 0,
     });
   }
@@ -498,8 +593,8 @@ function stepSpray(field, dt) {
   for (const drop of field.spray) {
     drop.age += dt;
     if (drop.age >= drop.life) continue;
+    drop.vx += (windU - drop.vx) * Math.min(1, 1.6 * dt);
     drop.vy -= 11 * dt;
-    drop.vx *= 0.985;
     drop.x += drop.vx * dt;
     drop.y += drop.vy * dt;
     next.push(drop);
@@ -517,7 +612,9 @@ export function classifySea(field, stats) {
   const period = live?.period ?? selectedParams(field)?.period ?? 0;
   const wind = field.weather?.strength ?? 0;
 
-  if (breaking || (ak > 0.95 && hs > 1.2)) return { name: "Breaking", hs, ak, period };
+  if (breaking || (ak > 0.95 && hs > 1.2) || (wind > 0.42 && hs > 0.85 && ak > 0.3)) {
+    return { name: "Breaking", hs, ak, period };
+  }
   if (hs < 0.08) return { name: "Still", hs, ak, period };
   if (wind > 0.72) return { name: "Gale", hs, ak, period };
   if (hs < 0.35 && (live?.wavelength ?? selectedParams(field)?.wavelength ?? 32) < 8) {
