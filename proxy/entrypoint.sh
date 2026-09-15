@@ -39,11 +39,13 @@ normalize_upstream() {
   esac
 }
 
+export PHYSICS_UPSTREAM
 export ANALOG_UPSTREAM
 export HANDWRITING_UPSTREAM
 export DOGFIGHT_UPSTREAM
 export WAVE_UPSTREAM
 export SWARM_UPSTREAM
+PHYSICS_UPSTREAM="$(normalize_upstream "${PHYSICS_UPSTREAM:-}" nonlinear-physics-lab 8084)"
 ANALOG_UPSTREAM="$(normalize_upstream "${ANALOG_UPSTREAM:-}" analog-chi3-lab 8080)"
 HANDWRITING_UPSTREAM="$(normalize_upstream "${HANDWRITING_UPSTREAM:-}" handwriting-ai-lab 8081)"
 DOGFIGHT_UPSTREAM="$(normalize_upstream "${DOGFIGHT_UPSTREAM:-}" dogfight-ai-lab 8082)"
@@ -51,6 +53,7 @@ WAVE_UPSTREAM="$(normalize_upstream "${WAVE_UPSTREAM:-}" wave-rider-lab 8080)"
 SWARM_UPSTREAM="$(normalize_upstream "${SWARM_UPSTREAM:-}" swarm-memory-lab 8083)"
 
 echo "chi3-labs proxy upstreams:"
+echo "  physics     ${PHYSICS_UPSTREAM}"
 echo "  analog      ${ANALOG_UPSTREAM}"
 echo "  handwriting ${HANDWRITING_UPSTREAM}"
 echo "  dogfight    ${DOGFIGHT_UPSTREAM}"

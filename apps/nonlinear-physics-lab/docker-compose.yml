@@ -1,0 +1,8 @@
+services:
+  nonlinear-physics-lab:
+    build: .
+    ports:
+      - "8084:8084"
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: "1"

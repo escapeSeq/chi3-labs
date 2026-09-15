@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>χ Nonlinear Physics Lab — analog fundamentals</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%230c1418' width='64' height='64'/%3E%3Ctext x='32' y='42' text-anchor='middle' fill='%23e6c36a' font-size='28' font-family='monospace'%3Eχ%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="static/styles.css" />
+  </head>
+  <body>
+    <header class="mast">
+      <div class="brand">
+        <span class="mark">χ</span>
+        <div class="brand-copy">
+          <div class="brand-row">
+            <p class="eyebrow">Chi3-labs · nonlinear analog physics</p>
+            <nav class="labs" aria-label="Chi3 labs">
+              <a href="/">hub</a>
+              <a href="/analog/">analog</a>
+              <a href="/handwriting/">handwriting</a>
+              <a href="/dogfight/">dogfight</a>
+              <a href="/swarm/">swarm</a>
+              <a href="/waves/">waves</a>
+            </nav>
+          </div>
+          <h1>What a nonlinear analog medium actually does</h1>
+        </div>
+      </div>
+      <p class="lede">
+        Before an analog computer can multiply, mix, or lock a spin, a field
+        has to enter a medium. Linear media copy. Nonlinear media multiply:
+        χ² squares the field, χ³ cubes it. This lab is that constitutive
+        curve, live on a scope — the physics the
+        <a href="/analog/">analog computing lab</a> then puts to work.
+      </p>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab is-on" data-tab="drive" type="button">Drive</button>
+      <button class="tab" data-tab="kerr" type="button">Kerr</button>
+      <button class="tab" data-tab="saturate" type="button">Saturate</button>
+      <button class="tab" data-tab="primer" type="button">Why this is analog</button>
+      <button class="tab" data-tab="glossary" type="button">Glossary</button>
+    </nav>
+
+    <main>
+      <section id="panel-drive" class="panel is-on">
+        <aside class="rack">
+          <h2>Optical bench</h2>
+          <p class="help">
+            Instantaneous medium P = χ¹E + χ²E² + χ³E³. Curve, scope, and spectrum move together.
+            <button class="term-jump" type="button" data-jump="term-medium">What is a medium?</button>
+          </p>
+          <pre class="eq live" id="constitutive">P = 1.00 E</pre>
+          <label>
+            χ¹ linear
+            <input id="chi1" type="range" min="0" max="1.6" step="0.02" value="1" title="Linear susceptibility. Scales the copy." />
+            <span id="chi1-read">1.00</span>
+          </label>
+          <p class="help">Scaled copy. Superposition holds while χ² and χ³ are zero.
+            <button class="term-jump" type="button" data-jump="term-linear">Linear / χ¹</button>
+          </p>
+          <label>
+            χ² quadratic
+            <input id="chi2" type="range" min="-1" max="1" step="0.02" value="0" title="Even nonlinearity. DC, 2ω, sum and difference." />
+            <span id="chi2-read">0.00</span>
+          </label>
+          <p class="help">
+            Squares the field. Sign flips the parabola. Makes even frequencies.
+            <button class="term-jump" type="button" data-jump="term-quadratic">Quadratic / χ²</button>
+          </p>
+          <label>
+            χ³ cubic
+            <input id="chi3" type="range" min="-0.8" max="0.8" step="0.02" value="0" title="Odd nonlinearity. 3ω, Kerr at ω, four-wave mixing." />
+            <span id="chi3-read">0.00</span>
+          </label>
+          <p class="help">
+            Cubes the field. Negative saturates; positive steepens the S.
+            <button class="term-jump" type="button" data-jump="term-cubic">Cubic / χ³</button>
+          </p>
+          <label>
+            Drive amplitude A
+            <input id="amp" type="range" min="0.2" max="1.6" step="0.02" value="1.15" />
+            <span id="amp-read">1.15</span>
+          </label>
+          <p class="help">How far the sine walks along P(E). Nonlinearity is invisible at tiny A.</p>
+          <label class="check">
+            <input id="second-tone" type="checkbox" />
+            Second tone (mixer)
+          </label>
+          <p class="help">
+            Two drives. Linear: two spikes. Nonlinear: sum, difference, four-wave lines.
+            <button class="term-jump" type="button" data-jump="term-superposition">Superposition</button>
+          </p>
+          <div class="presets">
+            <button type="button" data-preset="linear">Linear copy</button>
+            <button type="button" data-preset="doubler">Frequency doubler</button>
+            <button type="button" data-preset="kerr">Cubic / Kerr</button>
+            <button type="button" data-preset="mixer">Two-tone mixer</button>
+          </div>
+        </aside>
+
+        <div class="stage">
+          <div class="scope-row">
+            <article class="scope">
+              <header>
+                <h3>Constitutive curve P(E)</h3>
+                <span class="badge" id="curve-badge">linear</span>
+              </header>
+              <canvas id="transfer" width="640" height="360"></canvas>
+              <p class="caption">
+                Dot is the live operating point. Amber is P(E); dashed is the linear copy χ¹E.
+              </p>
+            </article>
+            <article class="scope">
+              <header>
+                <h3>Oscilloscope</h3>
+                <span class="badge muted">E vs P</span>
+              </header>
+              <canvas id="scope" width="640" height="360"></canvas>
+              <p class="caption">
+                Teal drive E(t). Amber response P(t). Dashed: what linear would have done.
+              </p>
+            </article>
+          </div>
+          <article class="trace">
+            <header>
+              <h3>Spectrum analyzer</h3>
+              <span class="badge muted" id="spec-badge">one tone</span>
+            </header>
+            <canvas id="spectrum" width="1200" height="240"></canvas>
+            <p class="legend" aria-label="Spectrum legend">
+              <span><i class="swatch drive"></i> drive E</span>
+              <span><i class="swatch plus"></i> response P</span>
+              <span>Labels are the mixing products that χ² and χ³ are allowed to write.</span>
+            </p>
+          </article>
+        </div>
+
+        <aside class="meters">
+          <h2>What appeared</h2>
+          <dl id="metrics">
+            <div>
+              <dt title="Normalized gap between P(E1+E2) and P(E1)+P(E2). Zero means linear.">
+                Superposition error
+              </dt>
+              <dd id="m-mix">—</dd>
+            </div>
+            <div>
+              <dt>DC / rectification</dt>
+              <dd id="m-dc">—</dd>
+            </div>
+            <div>
+              <dt>Second harmonic</dt>
+              <dd id="m-2">—</dd>
+            </div>
+            <div>
+              <dt>Third harmonic</dt>
+              <dd id="m-3">—</dd>
+            </div>
+            <div>
+              <dt>Sum / difference</dt>
+              <dd id="m-sum">—</dd>
+            </div>
+          </dl>
+          <p class="help">
+            Superposition error leaves zero the moment the medium multiplies.
+            <button class="term-jump" type="button" data-jump="term-superposition">Superposition</button>
+          </p>
+          <blockquote id="drive-lesson">
+            Start linear. The curve is a line, the scope is a scaled sine, the spectrum is one spike.
+          </blockquote>
+        </aside>
+      </section>
+
+      <section id="panel-kerr" class="panel">
+        <aside class="rack">
+          <h2>Kerr slab</h2>
+          <p class="help">
+            A thin χ³ slice. Intensity I = |E|² writes a phase n₂ I on every
+            point of a Gaussian beam at once.
+            <button class="term-jump" type="button" data-jump="term-kerr">Kerr index</button>
+          </p>
+          <pre class="eq">n = n₀ + n₂ I</pre>
+          <label>
+            n₂ Kerr coefficient
+            <input id="n2" type="range" min="-2" max="2.8" step="0.05" value="1.4" />
+            <span id="n2-read">1.40</span>
+          </label>
+          <p class="help">Zero: uniform wavelength. Positive: bright core advances. Negative: it retards.</p>
+          <label>
+            Beam waist
+            <input id="waist" type="range" min="0.16" max="0.55" step="0.01" value="0.28" />
+            <span id="waist-read">0.28</span>
+          </label>
+          <label>
+            Amplitude
+            <input id="kerr-amp" type="range" min="0.4" max="1.6" step="0.02" value="1" />
+            <span id="kerr-amp-read">1.00</span>
+          </label>
+          <p class="help">Phase span scales as n₂ A² — the analog multiply of the field by itself.</p>
+        </aside>
+        <div class="stage">
+          <article class="scope">
+            <header>
+              <h3>Beam · intensity and Kerr phase</h3>
+              <span class="badge" id="kerr-badge">n₂ I</span>
+            </header>
+            <canvas id="kerr-profiles" width="1200" height="280"></canvas>
+            <p class="caption">Teal is intensity. Amber is the extra phase the slab writes.</p>
+          </article>
+          <article class="scope">
+            <header>
+              <h3>Carrier through the slab</h3>
+              <span class="badge muted">self-phase modulation</span>
+            </header>
+            <canvas id="kerr-carrier" width="1200" height="280"></canvas>
+            <p class="caption">
+              Dashed: linear carrier. Solid: after n₂ I. The bright middle bunches first.
+            </p>
+          </article>
+        </div>
+        <aside class="meters">
+          <h2>One slice</h2>
+          <dl>
+            <div><dt>Peak intensity</dt><dd id="k-i">—</dd></div>
+            <div><dt>Phase span</dt><dd id="k-phi">—</dd></div>
+            <div><dt>n₂ A²</dt><dd id="k-product">—</dd></div>
+          </dl>
+          <blockquote id="kerr-lesson">
+            Intensity writes phase. That is χ³ looking at space instead of time.
+          </blockquote>
+        </aside>
+      </section>
+
+      <section id="panel-saturate" class="panel">
+        <aside class="rack">
+          <h2>Saturating well</h2>
+          <p class="help">
+            Unplug the graph from a coherent Ising oscillator and you are left
+            with this: gain versus a cubic restoring force.
+            <button class="term-jump" type="button" data-jump="term-well">Saturating well</button>
+          </p>
+          <pre class="eq">ẋ = (p − 1) x − χ³ x³</pre>
+          <label>
+            Pump p
+            <input id="pump" type="range" min="0" max="2.4" step="0.02" value="1.55" />
+            <span id="pump-read">1.55</span>
+          </label>
+          <p class="help">Below 1 the origin is stable. Past 1, gain wants to explode.</p>
+          <label>
+            χ³ cubic
+            <input id="sat-chi3" type="range" min="0" max="2" step="0.02" value="1" />
+            <span id="sat-chi3-read">1.00</span>
+          </label>
+          <p class="help">Zero cubic + p &gt; 1 is runaway. Nonzero cubic splits 0 into ± wells — an analog bit.</p>
+          <label>
+            Kick x₀
+            <input id="x0" type="range" min="-0.4" max="0.4" step="0.01" value="0.08" />
+            <span id="x0-read">+0.08</span>
+          </label>
+          <div class="actions">
+            <button id="kick" class="primary" type="button">Drop the amplitude in</button>
+          </div>
+        </aside>
+        <div class="stage">
+          <div class="scope-row">
+            <article class="scope">
+              <header>
+                <h3>Potential V(x)</h3>
+                <span class="badge" id="well-badge">double well</span>
+              </header>
+              <canvas id="potential" width="640" height="360"></canvas>
+              <p class="caption">Dot is the live amplitude. Wells at ±√((p−1)/χ³) when p &gt; 1.</p>
+            </article>
+            <article class="scope">
+              <header>
+                <h3>Amplitude vs analog time</h3>
+                <span class="badge muted">overdamped</span>
+              </header>
+              <canvas id="settle" width="640" height="360"></canvas>
+              <p class="caption">Settling of ẋ = (p−1)x − χ³ x³ from the kick x₀.</p>
+            </article>
+          </div>
+        </div>
+        <aside class="meters">
+          <h2>Readout</h2>
+          <dl>
+            <div><dt>Wells</dt><dd id="s-wells">—</dd></div>
+            <div><dt>Final x</dt><dd id="s-final">—</dd></div>
+            <div><dt>sign(x)</dt><dd id="s-spin">—</dd></div>
+          </dl>
+          <blockquote id="sat-lesson">
+            Raise the pump past 1. The cubic is the only thing that makes a bit instead of a fire.
+          </blockquote>
+        </aside>
+      </section>
+
+      <section id="panel-primer" class="panel primer">
+        <article>
+          <h2>Three facts, then a computer</h2>
+          <p>
+            Analog physics is continuous fields evolving in a medium. Digital
+            physics is bits updated in a loop. The whole χ³ computing story
+            sits on three facts you can see on the Drive pane.
+          </p>
+          <ol>
+            <li>
+              <strong>Linear copies.</strong> P = χ¹ E. Superposition holds.
+              The spectrum of the output is the spectrum of the input. A
+              linear analog box is a filter, not a computer.
+            </li>
+            <li>
+              <strong>Powers multiply.</strong> E² and E³ are analog multiplies
+              that happen at every instant, at every point in the medium. New
+              frequencies are the receipt.
+            </li>
+            <li>
+              <strong>A cubic can saturate.</strong> Gain plus −χ³ x³ splits a
+              well into ±. That is a bit written by physics, not by a
+              comparison instruction.
+            </li>
+          </ol>
+          <p>
+            The <a href="/analog/">analog lab</a> then wires many of those
+            wells together with a coupling matrix and calls the settled signs
+            a Max-Cut. This lab is the single well, the single multiply, the
+            single constitutive curve.
+          </p>
+        </article>
+        <article>
+          <h2>The teaching model</h2>
+          <pre class="eq">P = χ⁽¹⁾ E + χ⁽²⁾ E² + χ⁽³⁾ E³</pre>
+          <p>
+            Instantaneous, weakly nonlinear, no dispersion. A sine through
+            χ² becomes DC + 2ω because sin²ωt = ½ − ½ cos 2ωt. A sine through
+            χ³ becomes a corrected ω plus 3ω because sin³ωt = ¾ sin ωt − ¼ sin 3ωt.
+            Two sines through either are analog mixers.
+          </p>
+          <pre class="eq">n = n₀ + n₂ I     ẋ = (p − 1) x − χ³ x³</pre>
+          <p>
+            Same cubic, two costumes: a Kerr phase on a beam, and a Duffing
+            well that can lock. Real hardware uses crystals, fibers,
+            transistors, Josephson junctions — all of them a P(E) curve.
+          </p>
+          <h3>Honest limits</h3>
+          <ul>
+            <li>No memory, no delay, no noise figure — those are the next labs.</li>
+            <li>χ² needs a medium without inversion symmetry. χ³ is allowed everywhere.</li>
+            <li>Saturation makes a bit; it does not by itself solve a hard graph.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section id="panel-glossary" class="panel glossary" aria-label="Glossary">
+        <article id="term-medium">
+          <h2>Medium</h2>
+          <p>
+            Whatever writes a response P from a field E: an optical crystal,
+            a Kerr fiber, a transistor’s transfer curve, a Josephson
+            junction. The lab treats it as a function P(E) applied to the
+            whole waveform at once — analog, not a loop over samples.
+          </p>
+        </article>
+        <article id="term-linear">
+          <h2>Linear / χ¹</h2>
+          <p>
+            P = χ¹ E. Output is a scaled copy of input. Superposition holds:
+            two drives stay two drives. The spectrum does not grow new
+            lines. A linear analog box filters; it does not mix or compute.
+          </p>
+          <pre class="eq">P = χ⁽¹⁾ E</pre>
+        </article>
+        <article id="term-quadratic">
+          <h2>Quadratic / χ²</h2>
+          <p>
+            An E² term. Even in the field: flipping E does not flip P. One
+            sine yields DC (optical rectification) and a second harmonic.
+            Two sines yield the sum and the difference — a mixer, which is
+            analog multiplication in frequency.
+          </p>
+          <pre class="eq">sin² ωt = ½ − ½ cos 2ωt</pre>
+          <p>Sign of χ² tilts the parabola on the constitutive plot.</p>
+        </article>
+        <article id="term-cubic">
+          <h2>Cubic / χ³</h2>
+          <p>
+            An E³ term. Odd in the field. One sine yields a third harmonic
+            plus an intensity-dependent correction at ω (the Kerr index).
+            Two sines yield four-wave mixing 2ω₁−ω₂. Negative χ³ on the
+            Drive pane saturates the S-curve; that is the same cubic the
+            saturating well uses as a restoring force.
+          </p>
+          <pre class="eq">sin³ ωt = ¾ sin ωt − ¼ sin 3ωt</pre>
+        </article>
+        <article id="term-superposition">
+          <h2>Superposition</h2>
+          <p>
+            P(E₁ + E₂) = P(E₁) + P(E₂). True if and only if the medium is
+            linear. The meter is the normalized gap. When it leaves zero,
+            the medium is multiplying the field by itself, and new
+            frequencies are the receipt.
+          </p>
+        </article>
+        <article id="term-kerr">
+          <h2>Kerr index</h2>
+          <p>
+            n = n₀ + n₂ I with I = |E|². Intensity writes phase. A bright
+            core advances or retards relative to the wings — self-phase
+            modulation. It is χ³ looking at space: every point of the beam
+            is an analog multiply, in one optical instant.
+          </p>
+          <pre class="eq">n = n₀ + n₂ |E|²</pre>
+        </article>
+        <article id="term-well">
+          <h2>Saturating well</h2>
+          <p>
+            Overdamped Duffing, the classroom CIM oscillator with the graph
+            unplugged. Below threshold (p &lt; 1) everything dies to 0. Above
+            threshold, gain without a cubic runs away; gain with a cubic
+            splits the origin into ±√((p−1)/χ³). sign(x) after settling is
+            a bit written by physics.
+          </p>
+          <pre class="eq">ẋ = (p − 1) x − χ³ x³</pre>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Chi3-labs · nonlinear analog physics · the constitutive curve before the computer
+      </p>
+    </footer>
+    <script src="static/app.js"></script>
+  </body>
+</html>

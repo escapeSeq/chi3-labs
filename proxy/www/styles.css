@@ -136,6 +136,10 @@ h1 {
   text-decoration: none;
 }
 
+.bench.physics {
+  --accent: var(--amber);
+}
+
 .bench.analog {
   --accent: var(--amber);
 }

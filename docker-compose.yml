@@ -3,6 +3,7 @@
 #   docker compose up --build
 #
 # Hub:               http://localhost:8080
+# Physics lab:       http://localhost:8080/physics/
 # Analog lab:        http://localhost:8080/analog/
 # Handwriting lab:   http://localhost:8080/handwriting/
 # Dogfight lab:      http://localhost:8080/dogfight/
@@ -10,6 +11,16 @@
 # Wave lab:          http://localhost:8080/waves/
 
 services:
+  nonlinear-physics-lab:
+    build:
+      context: ./apps/nonlinear-physics-lab
+    expose:
+      - "8084"
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PORT: "8084"
+
   analog-chi3-lab:
     build:
       context: ./apps/analog-chi3-lab
@@ -74,12 +85,14 @@ services:
     restart: unless-stopped
     environment:
       PORT: "8080"
+      PHYSICS_UPSTREAM: nonlinear-physics-lab:8084
       ANALOG_UPSTREAM: analog-chi3-lab:8080
       HANDWRITING_UPSTREAM: handwriting-ai-lab:8081
       DOGFIGHT_UPSTREAM: dogfight-ai-lab:8082
       WAVE_UPSTREAM: wave-rider-lab:8080
       SWARM_UPSTREAM: swarm-memory-lab:8083
     depends_on:
+      - nonlinear-physics-lab
       - analog-chi3-lab
       - handwriting-ai-lab
       - dogfight-ai-lab
