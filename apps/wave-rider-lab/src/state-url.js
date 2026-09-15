@@ -121,11 +121,6 @@ export function applyState(field, ship, payload) {
   ship.vy = 0;
   ship.vp = 0;
   ship.heave = 0;
-  ship.fold = 0;
-  ship.hog = 0;
-  ship.damage = 0;
-  ship.broken = false;
-  ship._prevDepth = null;
 
   invalidateShipCaches(ship);
 

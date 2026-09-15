@@ -19,7 +19,6 @@ import {
   SHIP_LABELS,
   applyShipPreset,
   createShip,
-  foldPoint,
   liftLocal,
   resetShipMotion,
   settlePose,
@@ -105,7 +104,6 @@ const readouts = {
   sit: document.querySelector("#sit-val"),
   trim: document.querySelector("#trim-val"),
   lift: document.querySelector("#lift-val"),
-  hog: document.querySelector("#hog-val"),
 };
 
 const pauseBtn = document.querySelector("#btn-pause");
@@ -473,9 +471,8 @@ function drawShip(width, height, points) {
   const sin = Math.sin(ship.pitch);
 
   function point(lx, ly) {
-    const bent = foldPoint(lx, ly, ship.fold || 0);
-    const wx = (bent.x * cos - bent.y * sin) * heading;
-    const wy = bent.x * sin + bent.y * cos;
+    const wx = (lx * cos - ly * sin) * heading;
+    const wy = lx * sin + ly * cos;
     return [origin[0] + wx * scale, origin[1] - wy * scale];
   }
 
@@ -528,18 +525,6 @@ function drawShip(width, height, points) {
     strokePath(parts.mast);
     ctx.strokeStyle = "#d7c4a6";
     ctx.lineWidth = 1.4;
-    ctx.stroke();
-  }
-
-  if (ship.damage > 0.12) {
-    const crack = ship.damage;
-    ctx.strokeStyle = `rgba(232, 93, 76, ${0.35 + crack * 0.65})`;
-    ctx.lineWidth = 1.2 + crack * 2.4;
-    ctx.beginPath();
-    const [cx, cy] = point(0, ship.draft * 0.08);
-    const [kx, ky] = point(0, -ship.draft * 0.92);
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(kx, ky);
     ctx.stroke();
   }
 
@@ -622,7 +607,7 @@ function draw(stats) {
   const dir = windDir(field);
   for (let i = 1; i < stats.points.length; i += 1) {
     const point = stats.points[i];
-    if (!point.break || point.break < 0.12) continue;
+    if (!point.break || point.break < 0.06) continue;
     const prev = stats.points[i - 1];
     const slope = point.slope ?? (point.y - prev.y) / Math.max(1e-4, point.x - prev.x);
     const run = 0.18 + point.break * 0.7;
@@ -644,7 +629,7 @@ function draw(stats) {
   let foamOpen = false;
   for (let i = 0; i < stats.points.length; i += 1) {
     const point = stats.points[i];
-    if (!point.break || point.break < 0.28) {
+    if (!point.break || point.break < 0.14) {
       foamOpen = false;
       continue;
     }
@@ -676,23 +661,16 @@ function draw(stats) {
 function updateHud(stats) {
   const sea = classifySea(field, stats);
   pills.form.textContent = sea.name;
-  pills.form.classList.toggle(
-    "alert",
-    sea.name === "Breaking" || sea.name === "Huge" || sea.name === "Gale" || ship.broken || ship.damage > 0.45
-  );
+  pills.form.classList.toggle("alert", sea.name === "Breaking" || sea.name === "Huge" || sea.name === "Gale");
   pills.height.textContent = `Hs ${sea.hs.toFixed(2)} m`;
   pills.period.textContent = `T ${sea.period.toFixed(1)} s`;
   if (stats.waveC > 0.05) {
     const enc = stats.waveC + (ship.heading >= 0 ? 1 : -1) * ship.speed;
     pills.steep.textContent = `c ${msToKnots(stats.waveC).toFixed(1)} kn`;
-    pills.ship.textContent = ship.broken
-      ? `${courseLabel()} · hull break`
-      : `${courseLabel()} · ${msToKnots(ship.speed).toFixed(1)} kn · ${msToKnots(enc).toFixed(1)} kn λ`;
+    pills.ship.textContent = `${courseLabel()} · ${msToKnots(ship.speed).toFixed(1)} kn · ${msToKnots(enc).toFixed(1)} kn λ`;
   } else {
     pills.steep.textContent = `ak ${sea.ak.toFixed(2)}`;
-    pills.ship.textContent = ship.broken
-      ? `${courseLabel()} · hull break`
-      : `${courseLabel()} · ${msToKnots(ship.speed).toFixed(1)} kn`;
+    pills.ship.textContent = `${courseLabel()} · ${msToKnots(ship.speed).toFixed(1)} kn`;
   }
   readouts.course.textContent = courseLabel();
   readouts.heave.textContent = `${ship.heave.toFixed(2)} m`;
@@ -701,10 +679,6 @@ function updateHud(stats) {
   readouts.sit.textContent = `${ship.sit.toFixed(2)} m`;
   if (readouts.trim) readouts.trim.textContent = `${ship.trim >= 0 ? "+" : ""}${ship.trim.toFixed(2)} m`;
   if (readouts.lift) readouts.lift.textContent = `${(ship.liftSum / 1000).toFixed(1)} kN`;
-  if (readouts.hog) {
-    const hog = ship.hog || 0;
-    readouts.hog.textContent = ship.broken ? "broken" : `${Math.round(Math.min(hog, 3) * 100)}%`;
-  }
 }
 
 function sampleSea() {
@@ -739,11 +713,6 @@ function resetSimulation() {
   ship._gainKey = null;
   ship._partsKey = null;
   ship._liftForces = null;
-  ship.fold = 0;
-  ship.hog = 0;
-  ship.damage = 0;
-  ship.broken = false;
-  ship._prevDepth = null;
 
   activeShipPreset = "yacht";
   pauseBtn.textContent = "Pause";
@@ -854,7 +823,7 @@ function canvasToWorldX(clientX) {
 }
 
 function clickImpulseAmp() {
-  return (0.28 + peakAmplitude(field) * 0.08) * 10;
+  return 5.2 + Math.max(1.4, peakAmplitude(field)) * 1.8;
 }
 
 canvas.addEventListener("pointerdown", (event) => {
