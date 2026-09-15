@@ -228,6 +228,23 @@ function huntCopy() {
   };
 }
 
+function ffaOutcomeCopy() {
+  return {
+    failure: "timeout loss",
+    draw: "timeout loss",
+    win: "—",
+  };
+}
+
+function formatEvent(event) {
+  if (event === "draw") return "timeout loss";
+  return String(event || "").replaceAll("_", " ");
+}
+
+function formatEvents(events) {
+  return (events || []).map(formatEvent).join(", ");
+}
+
 function syncFightCopy(n) {
   const v = n ?? planeCount();
   const hunt = fightMode() === "hunt";
@@ -242,15 +259,15 @@ function syncFightCopy(n) {
     "field-hint",
     hunt
       ? "One against the pack. P1 is chased. The fight ends when that plane dies, the pack is wiped, or time runs out."
-      : `Free-for-all, ${v} aircraft. Last plane left wins. Out of bounds is a crash.`
+      : `Free-for-all, ${v} aircraft. Last plane left wins. Timeout with more than one still up is a loss. Out of bounds is a crash.`
   );
   text("winner-label", hunt ? "Last outcome" : "Last winner");
-  text("draw-label", hunt ? "Escapes · hunts" : "Draws · midairs");
+  text("draw-label", hunt ? "Escapes · hunts" : "Timeout losses · midairs");
   text(
     "timeout-label",
     hunt
       ? "Sortie timeout — the chased plane escapes if still up"
-      : "Sortie timeout — draw if more than one is still up"
+      : "Sortie timeout — loss if more than one is still up"
   );
   text(
     "hangar-hint",
@@ -885,7 +902,7 @@ function applyStatus(body) {
     text("winner-read", huntCopy()[s.last_outcome] || (s.last_winner ? brainLabel(s.last_winner) : "—"));
     text("draw-read", `${s.escapes ?? 0} · ${s.hunts ?? 0}`);
   } else {
-    text("winner-read", s.last_winner ? brainLabel(s.last_winner) : "—");
+    text("winner-read", s.last_winner ? brainLabel(s.last_winner) : ffaOutcomeCopy()[s.last_outcome] || "—");
     text("draw-read", `${s.draws ?? 0} · ${s.midairs ?? 0}`);
   }
   const learners = rosterList().filter((b) => b.learn !== false);
@@ -1117,12 +1134,12 @@ function playTrace(frames, summary, onDone) {
     const frame = state.frames[state.i];
     drawField(frame);
     const ev = frame.events[frame.events.length - 1] || "in the merge";
-    $("field-caption").textContent = `t = ${frame.t.toFixed(2)}s · ${ev.replaceAll("_", " ")} · ${state.i + 1}/${state.frames.length}`;
+    $("field-caption").textContent = `t = ${frame.t.toFixed(2)}s · ${formatEvent(ev)} · ${state.i + 1}/${state.frames.length}`;
     state.i += 1;
     if (state.i >= state.frames.length) {
       stopPlay();
       if (summary?.events?.length) {
-        $("field-caption").textContent = `Ended: ${summary.events.join(", ").replaceAll("_", " ")} — next sortie starting`;
+        $("field-caption").textContent = `Ended: ${formatEvents(summary.events)} — next sortie starting`;
       }
       if (onDone) state.nextTimer = setTimeout(onDone, 700);
     }
@@ -1181,7 +1198,7 @@ async function flyNext(loopId) {
     applyStatus(body);
     const events = body.summary?.events || [];
     $("status").textContent = events.length
-      ? `Sortie ${body.score.episodes} ended (${events.join(", ").replaceAll("_", " ")}). Restarting.`
+      ? `Sortie ${body.score.episodes} ended (${formatEvents(events)}). Restarting.`
       : `Sortie ${body.score.episodes} in the air.`;
     playTrace(body.trace, body.summary, () => {
       state.busy = false;

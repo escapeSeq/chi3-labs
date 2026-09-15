@@ -1,0 +1,18 @@
+FROM python:3.12-slim
+
+WORKDIR /lab
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+COPY main.py .
+
+RUN mkdir -p /data
+
+ENV PORT=8083
+EXPOSE 8083
+
+# Empty --host binds IPv4 and IPv6. Railway private networking is IPv6;
+# healthchecks and Docker Compose still use IPv4.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host '' --port ${PORT:-8083}"]

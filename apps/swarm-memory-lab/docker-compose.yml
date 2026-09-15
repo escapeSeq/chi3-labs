@@ -1,0 +1,14 @@
+services:
+  swarm-memory-lab:
+    build: .
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: "1"
+      SWARM_DATA: /data
+    volumes:
+      - swarm-memory:/data
+
+volumes:
+  swarm-memory:

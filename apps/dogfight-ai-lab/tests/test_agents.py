@@ -1,7 +1,7 @@
 import numpy as np
 
 from app.agents import ACTION_NAMES, HIDDEN, OBS, Policy
-from app.trainer import Academy
+from app.trainer import Academy, Scoreboard
 
 
 def test_fresh_policy_is_near_uniform():
@@ -119,6 +119,29 @@ def test_roster_round_trips_on_data_dir(tmp_path):
     assert second.brains[flyer].parent_id == child.id
     assert second.brains[child.id].stored is True
     assert second.lineup[0]["brain_id"] != "p1"
+
+
+def test_draw_is_scored_as_failure():
+    board = Scoreboard()
+    board.note(["draw"], {"p1": "ace", "p2": "rookie"})
+    assert board.draws == 1
+    assert board.wins == {}
+    assert board.last_winner is None
+    assert board.last_outcome == "failure"
+    board.note(["win_p1"], {"p1": "ace", "p2": "rookie"})
+    assert board.draws == 1
+    assert board.wins == {"ace": 1}
+    assert board.last_winner == "ace"
+    assert board.last_outcome == "win"
+    academy = Academy(np.random.default_rng(0))
+    academy.max_steps = 4
+    result = academy.play(learn=False, persist=False)
+    assert "draw" in result["summary"]["events"]
+    assert result["summary"]["outcome"] == "failure"
+    assert result["summary"]["winner"] is None
+    assert academy.score.draws == 1
+    for stats in result["summary"]["brains"].values():
+        assert stats["return"] < -0.8
 
 
 def test_frozen_brain_does_not_learn():

@@ -148,6 +148,10 @@ h1 {
   --accent: var(--red);
 }
 
+.bench.swarm {
+  --accent: var(--blue);
+}
+
 .bench.waves {
   --accent: var(--blue);
 }

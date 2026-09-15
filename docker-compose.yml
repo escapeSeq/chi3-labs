@@ -6,6 +6,7 @@
 # Analog lab:        http://localhost:8080/analog/
 # Handwriting lab:   http://localhost:8080/handwriting/
 # Dogfight lab:      http://localhost:8080/dogfight/
+# Swarm lab:         http://localhost:8080/swarm/
 # Wave lab:          http://localhost:8080/waves/
 
 services:
@@ -52,6 +53,19 @@ services:
       PYTHONUNBUFFERED: "1"
       PORT: "8080"
 
+  swarm-memory-lab:
+    build:
+      context: ./apps/swarm-memory-lab
+    expose:
+      - "8083"
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PORT: "8083"
+      SWARM_DATA: /data
+    volumes:
+      - swarm-memory:/data
+
   proxy:
     build:
       context: ./proxy
@@ -64,11 +78,14 @@ services:
       HANDWRITING_UPSTREAM: handwriting-ai-lab:8081
       DOGFIGHT_UPSTREAM: dogfight-ai-lab:8082
       WAVE_UPSTREAM: wave-rider-lab:8080
+      SWARM_UPSTREAM: swarm-memory-lab:8083
     depends_on:
       - analog-chi3-lab
       - handwriting-ai-lab
       - dogfight-ai-lab
       - wave-rider-lab
+      - swarm-memory-lab
 
 volumes:
   dogfight-brains:
+  swarm-memory:

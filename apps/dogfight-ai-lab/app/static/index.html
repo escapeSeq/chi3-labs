@@ -8,7 +8,7 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%230c1418' width='64' height='64'/%3E%3Cpath d='M12 40 L32 16 L52 40 L32 32 Z' fill='%23e85d4c'/%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="static/styles.css?v=full-obs" />
+    <link rel="stylesheet" href="static/styles.css?v=draw-loss" />
   </head>
   <body>
     <header class="mast">
@@ -21,6 +21,7 @@
               <a href="/">hub</a>
               <a href="/analog/">analog</a>
               <a href="/handwriting/">handwriting</a>
+              <a href="/swarm/">swarm</a>
               <a href="/waves/">waves</a>
             </nav>
           </div>
@@ -30,7 +31,8 @@
       <p class="lede">
         Each plane is a Dubins vehicle: yaw is capped by speed ÷ turn radius,
         and the gun is welded to the nose. Everyone shoots everyone. A sortie
-        ends when one aircraft remains, or the clock runs out. Each seat starts
+        ends when one aircraft remains, or the clock runs out — a timeout with
+        more than one plane still up is a loss for every survivor. Each seat starts
         with its own brain. Share a brain only if you choose to. Revise a seat
         to store the current net in the library and keep learning on a copy.
         Weights live on <code>/data</code>.
@@ -47,7 +49,7 @@
         <p class="big win" id="winner-read">—</p>
       </div>
       <div class="stat">
-        <p class="sub" id="draw-label">Draws · midairs</p>
+        <p class="sub" id="draw-label">Timeout losses · midairs</p>
         <p class="big" id="draw-read">0 · 0</p>
       </div>
       <div class="versus">
@@ -88,7 +90,7 @@
           <p class="hint" id="planes-read">2 planes · each seat has its own brain</p>
         </label>
         <label>
-          <span id="timeout-label">Sortie timeout — draw if more than one is still up</span>
+          <span id="timeout-label">Sortie timeout — loss if more than one is still up</span>
           <input id="timeout-num" type="number" min="10" max="600" step="1" value="600" />
           <div class="burst-row">
             <span>10s</span>
@@ -178,7 +180,8 @@
         <h2>Last plane standing</h2>
         <p>
           There are no teams. A kill, a wall, or a mid-air takes you out. The
-          fight continues until one aircraft is left, or timeout scores a draw.
+          fight continues until one aircraft is left. Timeout with more than one
+          plane still up is a draw, counted as a loss and a failure.
         </p>
       </article>
       <article>
@@ -206,6 +209,6 @@
     <footer>
       <p>Chi3-labs</p>
     </footer>
-    <script src="static/app.js?v=full-obs" type="module"></script>
+    <script src="static/app.js?v=draw-loss" type="module"></script>
   </body>
 </html>

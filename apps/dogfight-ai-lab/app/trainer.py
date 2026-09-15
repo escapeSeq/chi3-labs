@@ -123,11 +123,13 @@ class Scoreboard:
                 bid = name_to_brain.get(name, name)
                 self.wins[bid] = self.wins.get(bid, 0) + 1
                 self.last_winner = bid
+                self.last_outcome = "win"
             elif event == "midair":
                 self.midairs += 1
         if mode != MODE_HUNT:
             if "draw" in events and not any(e.startswith("win_") for e in events):
                 self.draws += 1
+                self.last_outcome = "failure"
             return
         prey_name = prey_name or "p1"
         pack_names = list(pack_names or [])
@@ -985,7 +987,7 @@ def _narrate(rows: list[dict], score: Scoreboard, brains: dict[str, BrainSlot], 
     return (
         f"{len(rows)} last-plane-standing sorties. Mean life {life0:.0f} → {life1:.0f} steps. "
         f"Crash fraction {crash0:.0%} → {crash1:.0%}. "
-        f"Wins leader: {champ}. Draws {score.draws}, midairs {score.midairs}."
+        f"Wins leader: {champ}. Timeout losses {score.draws}, midairs {score.midairs}."
     )
 
 

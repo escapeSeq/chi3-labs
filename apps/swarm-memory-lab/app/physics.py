@@ -1,10 +1,7 @@
-"""2-D free-for-all gun fight with a hard turn radius and forward-only shots.
+"""2-D gun fight from the dogfight lab, used as the swarm hunting ground.
 
-Each plane is a Dubins-style vehicle: constant speed, yaw rate capped by
-speed / turn_radius. The gun is bolted to the nose — bullets inherit heading
-and never steer. Every other living plane is a target. The sortie ends when
-one plane remains, or the clock runs out. A timeout with more than one
-plane still up is a draw, scored as a loss for every survivor.
+Each drone is a Dubins vehicle: constant speed, yaw capped by speed / turn
+radius, gun welded to the nose. Default fight is one prey against a pack.
 """
 
 from __future__ import annotations
@@ -15,7 +12,7 @@ import numpy as np
 
 ARENA = 1.0
 DT = 0.05
-MAX_STEPS = 12000
+MAX_STEPS = 2400
 MIN_STEPS = 200
 MAX_STEPS_CAP = 12000
 SPEED = 0.20
@@ -26,13 +23,43 @@ BULLET_LIFE = 0.46
 HIT_R = 0.028
 COOLDOWN = 0.65
 GUN_RANGE = BULLET_SPEED * BULLET_LIFE
-MIN_PLANES = 2
-MAX_PLANES = 9
-OTHER_SLOTS = MAX_PLANES - 1
-LEGACY_OBS = 10
+SENSE_RANGE = 0.40
+MIN_PLANES = 3
+MAX_PLANES = 8
+DEFAULT_PLANES = 5
 MODE_FFA = "ffa"
 MODE_HUNT = "hunt"
 MODES = (MODE_FFA, MODE_HUNT)
+
+OBS_NAMES = (
+    "fwd",
+    "right",
+    "range",
+    "rel h",
+    "x",
+    "y",
+    "cos",
+    "sin",
+    "wall",
+    "gun",
+    "edge L",
+    "edge R",
+    "edge B",
+    "edge T",
+    "mem fwd",
+    "mem rt",
+    "mem heat",
+    "mem kill",
+    "ally fwd",
+    "ally rt",
+    "align",
+    "crowd",
+    "role pt",
+    "role fl",
+    "role fr",
+    "role cut",
+)
+OBS = len(OBS_NAMES)
 
 
 def clamp_max_steps(steps: int) -> int:
@@ -53,9 +80,9 @@ def clamp_plane_count(n: int) -> int:
 
 def clamp_mode(mode: str | None) -> str:
     text = str(mode or "").strip().lower().replace(" ", "-")
-    if text in ("hunt", "pack", "chase", "prey", "1vpack", "one-against-the-pack"):
-        return MODE_HUNT
-    return MODE_FFA
+    if text in ("ffa", "free-for-all", "last-plane"):
+        return MODE_FFA
+    return MODE_HUNT
 
 
 def plane_id(i: int) -> str:
@@ -75,30 +102,14 @@ def wrap_angle(a: float) -> float:
     return float((a + np.pi) % (2 * np.pi) - np.pi)
 
 
-def observation_names() -> tuple[str, ...]:
-    names = [
-        "fwd",
-        "right",
-        "range",
-        "rel h",
-        "x",
-        "y",
-        "cos",
-        "sin",
-        "wall",
-        "gun",
-        "edge L",
-        "edge R",
-        "edge B",
-        "edge T",
-    ]
-    for slot in range(2, MAX_PLANES):
-        names.extend([f"n{slot}", f"fwd{slot}", f"rt{slot}", f"rng{slot}", f"h{slot}"])
-    return tuple(names)
+def decode_action(action: int) -> tuple[int, bool]:
+    action = int(action)
+    return (action % 3) - 1, action >= 3
 
 
-OBS_NAMES = observation_names()
-OBS = len(OBS_NAMES)
+def encode_action(turn: int, fire: bool) -> int:
+    turn = int(np.clip(round(turn), -1, 1))
+    return (turn + 1) + (3 if fire else 0)
 
 
 @dataclass
@@ -110,6 +121,7 @@ class Plane:
     heading: float
     brain_id: str = ""
     role: str = "ffa"
+    swarm_role: str = ""
     cooldown: float = 0.0
     alive: bool = True
 
@@ -119,6 +131,7 @@ class Plane:
             "seat": self.seat,
             "brain_id": self.brain_id or self.name,
             "role": self.role,
+            "swarm_role": self.swarm_role,
             "x": self.x,
             "y": self.y,
             "heading": self.heading,
@@ -143,14 +156,16 @@ class Bullet:
 class World:
     rng: np.random.Generator
     max_steps: int = MAX_STEPS
-    n_planes: int = MIN_PLANES
-    mode: str = MODE_FFA
+    n_planes: int = DEFAULT_PLANES
+    mode: str = MODE_HUNT
     lineup: list[dict[str, str]] | None = None
     planes: list[Plane] = field(init=False)
     bullets: list[Bullet] = field(default_factory=list)
     t: float = 0.0
     steps: int = 0
     events: list[str] = field(default_factory=list)
+    swarm_gain: float = 0.55
+    extra_turns: dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.max_steps = max(1, int(self.max_steps))
@@ -206,6 +221,7 @@ class World:
         self.t = 0.0
         self.steps = 0
         self.events = []
+        self.extra_turns = {}
 
     def step(self, red_action: int | dict[str, int], blue_action: int = 1) -> dict[str, float]:
         if self.mode == MODE_HUNT:
@@ -228,6 +244,7 @@ class World:
         self._midair(rewards)
         self._hits(rewards)
         self._shaping(rewards)
+        self._swarm_shaping(rewards)
         self.t += DT
         self.steps += 1
         if self.mode == MODE_HUNT:
@@ -259,14 +276,15 @@ class World:
             "planes": [p.pose() for p in self.planes],
             "bullets": [b.pose() for b in self.bullets],
             "events": list(self.events),
+            "links": self._pack_links(),
         }
 
-    def observe(self, who: str) -> np.ndarray:
+    def observe(self, who: str, extras: dict[str, float] | None = None) -> np.ndarray:
         me = self._plane(who)
-        others = self._visible_others(me)
-        focus = others[0] if others else me
+        focus = self._focus(me)
         out = np.zeros(OBS, dtype=float)
-        out[0:4] = _relative_plane(me, focus)
+        if focus is not None and _can_see(me, focus):
+            out[0:4] = _relative_plane(me, focus)
         out[4:10] = (
             (me.x - 0.5) * 2,
             (me.y - 0.5) * 2,
@@ -276,35 +294,31 @@ class World:
             me.cooldown / COOLDOWN,
         )
         out[10:14] = _edge_distances(me.x, me.y)
-        cursor = 14
-        extra = others[1:]
-        for slot in range(OTHER_SLOTS - 1):
-            if slot < len(extra):
-                plane = extra[slot]
-                out[cursor] = 1.0 if plane.alive else 0.0
-                out[cursor + 1 : cursor + 5] = _relative_plane(me, plane)
-            cursor += 5
+        ally = self._nearest_ally(me)
+        if ally is not None:
+            out[18:22] = (
+                *_relative_plane(me, ally)[:2],
+                float(np.cos(wrap_angle(ally.heading - me.heading))),
+                float(np.clip(0.12 / (np.hypot(ally.x - me.x, ally.y - me.y) + 1e-3), 0.0, 1.0)),
+            )
+        role = me.swarm_role or ""
+        out[22] = 1.0 if role == "point" else 0.0
+        out[23] = 1.0 if role == "flank_l" else 0.0
+        out[24] = 1.0 if role == "flank_r" else 0.0
+        out[25] = 1.0 if role == "cutter" else 0.0
+        if extras:
+            out[14] = float(extras.get("mem_fwd", 0.0))
+            out[15] = float(extras.get("mem_right", 0.0))
+            out[16] = float(extras.get("mem_heat", 0.0))
+            out[17] = float(extras.get("mem_kill", 0.0))
         return out
-
-    def _visible_others(self, me: Plane) -> list[Plane]:
-        others = [p for p in self.planes if p.name != me.name]
-        by_range = lambda p: float(np.hypot(p.x - me.x, p.y - me.y))
-        living = [p for p in others if p.alive]
-        dead = [p for p in others if not p.alive]
-        if self.mode == MODE_HUNT:
-            prey = self.prey()
-            if prey and prey.name != me.name and prey.alive:
-                living = [prey] + sorted((p for p in living if p.name != prey.name), key=by_range)
-            else:
-                living = sorted(living, key=by_range)
-        else:
-            living = sorted(living, key=by_range)
-        return living + sorted(dead, key=by_range)
 
     def _act(self, plane: Plane, action: int, rewards: dict[str, float]) -> None:
         action = int(np.clip(action, 0, 5))
-        turn = (action % 3) - 1
+        turn = float((action % 3) - 1)
         fire = action >= 3
+        extra = float(self.extra_turns.get(plane.name, 0.0))
+        turn = float(np.clip(turn + self.swarm_gain * extra, -1.0, 1.0))
         plane.heading = wrap_angle(plane.heading + turn * max_yaw_rate() * DT)
         plane.cooldown = max(0.0, plane.cooldown - DT)
         if fire:
@@ -414,6 +428,30 @@ class World:
             if margin < 0.12:
                 rewards[me.name] -= 0.14 * (0.12 - margin) / 0.12
 
+    def _swarm_shaping(self, rewards: dict[str, float]) -> None:
+        if self.mode != MODE_HUNT:
+            return
+        prey = self.prey()
+        pack = self.pack_living()
+        if prey is None or not prey.alive or len(pack) < 2:
+            return
+        angles = [float(np.arctan2(p.y - prey.y, p.x - prey.x)) for p in pack]
+        spread = 0.0
+        for i, a in enumerate(angles):
+            diffs = [abs(wrap_angle(a - b)) for j, b in enumerate(angles) if j != i]
+            if diffs:
+                spread += min(diffs)
+        spread = spread / max(len(pack), 1)
+        surround = float(np.clip(spread / (np.pi / max(len(pack), 1)), 0.0, 1.0))
+        for p in pack:
+            rewards[p.name] += 0.012 * surround
+            others = [q for q in pack if q.name != p.name]
+            if not others:
+                continue
+            nearest = min(float(np.hypot(p.x - q.x, p.y - q.y)) for q in others)
+            if nearest < 0.09:
+                rewards[p.name] -= 0.04 * (0.09 - nearest) / 0.09
+
     def _plane(self, who: str) -> Plane:
         for p in self.planes:
             if p.name == who:
@@ -430,12 +468,33 @@ class World:
             return None
         return min(others, key=lambda p: float(np.hypot(p.x - me.x, p.y - me.y)))
 
+    def _nearest_ally(self, me: Plane) -> Plane | None:
+        if self.mode == MODE_HUNT:
+            if me.role == "prey":
+                return None
+            others = [p for p in self.pack_living() if p.name != me.name]
+        else:
+            others = [p for p in self.living() if p.name != me.name]
+        if not others:
+            return None
+        return min(others, key=lambda p: float(np.hypot(p.x - me.x, p.y - me.y)))
+
     def _focus(self, me: Plane) -> Plane | None:
         if self.mode == MODE_HUNT:
             prey = self.prey()
             if prey and me.name != prey.name and prey.alive:
                 return prey
         return self._nearest_other(me)
+
+    def _pack_links(self) -> list[dict]:
+        pack = self.pack_living() if self.mode == MODE_HUNT else self.living()
+        links = []
+        for i, a in enumerate(pack):
+            for b in pack[i + 1 :]:
+                dist = float(np.hypot(a.x - b.x, a.y - b.y))
+                if dist < 0.28:
+                    links.append({"a": a.name, "b": b.name, "x0": a.x, "y0": a.y, "x1": b.x, "y1": b.y, "dist": dist})
+        return links
 
     def _already_over(self) -> bool:
         if self.mode == MODE_HUNT:
@@ -503,6 +562,10 @@ class World:
                 rewards[q.name] -= 1.2
 
 
+def _can_see(me: Plane, you: Plane) -> bool:
+    return float(np.hypot(you.x - me.x, you.y - me.y)) <= SENSE_RANGE
+
+
 def _relative_plane(me: Plane, you: Plane) -> tuple[float, float, float, float]:
     dx, dy = you.x - me.x, you.y - me.y
     c, s = np.cos(me.heading), np.sin(me.heading)
@@ -534,8 +597,3 @@ def _ray_to_wall(x: float, y: float, heading: float) -> float:
     elif s < -1e-9:
         hits.append((0.0 - y) / s)
     return float(min(hits)) if hits else 1.0
-
-
-def decode_action(action: int) -> tuple[int, bool]:
-    action = int(action)
-    return (action % 3) - 1, action >= 3

@@ -43,10 +43,14 @@ def test_custom_timeout_draws():
     w = World(np.random.default_rng(0), max_steps=4)
     w.red.x, w.red.y, w.red.heading = 0.4, 0.4, 0.0
     w.blue.x, w.blue.y, w.blue.heading = 0.6, 0.6, np.pi
+    rewards = {}
     while not w.done():
-        w.step(1, 1)
+        rewards = w.step(1, 1)
     assert w.steps == 4
     assert "draw" in w.events
+    assert not any(event.startswith("win_") for event in w.events)
+    assert rewards[w.red.name] < -0.8
+    assert rewards[w.blue.name] < -0.8
     assert steps_from_seconds(8) == 200
     assert steps_from_seconds(10) == 200
     assert steps_from_seconds(12) == 240

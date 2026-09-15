@@ -37,11 +37,13 @@ uvicorn app.main:app --host 0.0.0.0 --port 8082
   want identical tactics. If one copy should learn and another should stay
   put, **revise**: the child starts from the parent's weights and keeps
   training.
-- A sortie ends when one aircraft remains, or the timeout scores a draw.
+- A sortie ends when one aircraft remains. A timeout with more than one
+  plane still up is a draw, scored as a loss and a failure.
 
 Flights run continuously in the browser. Use **Train this burst** to
 fast-forward sorties (default 100, up to 1,000,000). Use **Sortie timeout**
-for the draw clock (10–600 s). Use **Planes in the fight** for 2–9 aircraft;
+for the clock (10–600 s); a timeout with more than one plane still flying
+is a loss. Use **Planes in the fight** for 2–9 aircraft;
 new seats get a fresh brain. The **Hangar** lists those active nets with
 sortable wins, kills, walls, and updates. The **Brain library** starts
 entries stay until you delete them. Putting a library brain on a plane

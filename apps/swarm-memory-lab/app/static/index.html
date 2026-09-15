@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Swarm Memory Lab — shared maps, hive learning</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%230c1418' width='64' height='64'/%3E%3Ccircle cx='22' cy='28' r='6' fill='%233db8c5'/%3E%3Ccircle cx='42' cy='22' r='6' fill='%233db8c5'/%3E%3Ccircle cx='38' cy='42' r='6' fill='%233db8c5'/%3E%3Ccircle cx='32' cy='32' r='3' fill='%23e6c36a'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="static/styles.css?v=swarm1" />
+  </head>
+  <body>
+    <header class="mast">
+      <div class="brand">
+        <span class="mark">⬡</span>
+        <div class="brand-copy">
+          <div class="brand-row">
+            <p class="eyebrow">Chi3-labs · swarm memory academy</p>
+            <nav class="labs" aria-label="Chi3 labs">
+              <a href="/">hub</a>
+              <a href="/analog/">analog</a>
+              <a href="/handwriting/">handwriting</a>
+              <a href="/dogfight/">dogfight</a>
+              <a href="/waves/">waves</a>
+            </nav>
+          </div>
+          <h1>One map, many drones</h1>
+        </div>
+      </div>
+      <p class="lede">
+        Same Dubins gun fight as the dogfight lab: turn radius is law, the gun
+        is welded to the nose. Here the pack also shares a decaying tactical
+        map. A hunter that sees the prey writes a scent; the others, out of
+        local range, steer by that memory. Hive mode goes further: every pack
+        body trains the same net. Isolated mode is the control — private brains,
+        no radio.
+      </p>
+    </header>
+
+    <section class="scoreboard" id="scoreboard">
+      <div class="stat">
+        <p class="sub">Sortie</p>
+        <p class="big" id="episode-read">0</p>
+      </div>
+      <div class="stat">
+        <p class="sub">Last outcome</p>
+        <p class="big win" id="winner-read">—</p>
+      </div>
+      <div class="stat">
+        <p class="sub">Hunts · escapes</p>
+        <p class="big" id="hunt-read">0 · 0</p>
+      </div>
+      <div class="versus">
+        <p id="matchup-read" class="sub">5 drones · hive</p>
+        <p id="empty-badge" class="badge">brains empty</p>
+      </div>
+    </section>
+    <div class="win-strip" id="win-strip"></div>
+
+    <main>
+      <section class="field-col">
+        <header>
+          <h2>The field</h2>
+          <p class="hint" id="field-hint">
+            Amber heat is prey scent in shared memory. Teal links are swarm
+            neighbors. P1 is chased.
+          </p>
+        </header>
+        <canvas id="field" width="720" height="720"></canvas>
+        <p class="caption" id="field-caption">Continuous flights — next sortie starts on its own.</p>
+        <div class="legend">
+          <span><i class="swatch prey"></i> prey scent</span>
+          <span><i class="swatch kill"></i> kill cells</span>
+          <span><i class="swatch danger"></i> danger</span>
+          <span><i class="swatch traffic"></i> pack traffic</span>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <h2>Flights</h2>
+        <button id="pause" class="primary" type="button">Pause flights</button>
+        <label>
+          Shared memory
+          <select id="share">
+            <option value="hive">Hive — one pack net + map</option>
+            <option value="blackboard">Blackboard — private nets + map</option>
+            <option value="isolated">Isolated — private nets, no map</option>
+          </select>
+        </label>
+        <label>
+          Fight mode
+          <select id="mode">
+            <option value="hunt">One against the pack</option>
+            <option value="ffa">Last plane standing</option>
+          </select>
+        </label>
+        <label>
+          Drones in the fight
+          <input id="planes-num" type="number" min="3" max="8" step="1" value="5" />
+          <div class="burst-row">
+            <span>3</span>
+            <input id="planes" type="range" min="3" max="8" step="1" value="5" />
+            <span>8</span>
+          </div>
+          <p class="hint" id="planes-read">5 drones · P1 chased, 4 hunt from one hive</p>
+        </label>
+        <label>
+          Swarm coupling
+          <div class="burst-row">
+            <span>0</span>
+            <input id="swarm-gain" type="range" min="0" max="100" step="1" value="55" />
+            <span>1</span>
+          </div>
+          <p class="hint" id="swarm-read">0.55 · flocking + hunt roles mix into yaw</p>
+        </label>
+        <label>
+          Memory steering
+          <div class="burst-row">
+            <span>0</span>
+            <input id="memory-gain" type="range" min="0" max="100" step="1" value="35" />
+            <span>1</span>
+          </div>
+          <p class="hint" id="memory-read">0.35 · follow the shared prey scent</p>
+        </label>
+        <label>
+          Sortie timeout — prey escapes if still up
+          <input id="timeout-num" type="number" min="10" max="600" step="1" value="120" />
+          <div class="burst-row">
+            <span>10s</span>
+            <input id="timeout" type="range" min="10" max="600" step="1" value="120" />
+            <span>600s</span>
+          </div>
+          <p class="hint" id="timeout-read">120 s · 2400 steps</p>
+        </label>
+        <button id="burst" type="button" aria-pressed="false">Burst training off</button>
+        <button id="wipe-memory" type="button">Wipe the shared map</button>
+        <p class="hint" id="burst-read">Burst training is idle.</p>
+        <p class="hint" id="status">Flights loop on their own. Empty nets first — expect walls.</p>
+        <h3>Learning</h3>
+        <canvas id="chart" width="420" height="180"></canvas>
+        <blockquote id="lesson-note">
+          Isolated drones only learn from their own sorties. Hive drones dump
+          every trajectory into one net.
+        </blockquote>
+      </aside>
+    </main>
+
+    <section class="admin">
+      <article class="hangar">
+        <header>
+          <h2>Pack</h2>
+          <p class="hint" id="hangar-hint">
+            In hive mode every hunter is the same net. Blackboard keeps private
+            weights but they all write the map. Isolated turns the radio off.
+          </p>
+        </header>
+        <div class="table-scroll" id="hangar"></div>
+      </article>
+    </section>
+
+    <section class="intel">
+      <header class="intel-head">
+        <div>
+          <h2>Shared memory</h2>
+          <p class="hint">
+            16×16 blackboard. Only hunters inside sense range (~0.40 arena) can
+            paint prey scent. The rest read the decaying heat.
+          </p>
+        </div>
+        <dl class="meters compact" id="memory-meters">
+          <div><dt>Prey scent</dt><dd id="mem-prey">0</dd></div>
+          <div><dt>Kill cells</dt><dd id="mem-kill">0</dd></div>
+          <div><dt>Danger</dt><dd id="mem-danger">0</dd></div>
+          <div><dt>Traffic</dt><dd id="mem-traffic">0</dd></div>
+        </dl>
+      </header>
+      <canvas id="memory-map" width="420" height="420"></canvas>
+      <p class="caption">Amber prey · cyan kills · red danger · teal traffic. Circle is the scent centroid.</p>
+    </section>
+
+    <section class="primer">
+      <article>
+        <h2>Why a shared map</h2>
+        <p>
+          Each drone only sees what is inside its sense radius. A hunter on the
+          far wall would be blind to the prey without a radio. The map is that
+          radio: whoever has eyes writes, and the scent decays so stale reports
+          fade.
+        </p>
+      </article>
+      <article>
+        <h2>Three ways to learn</h2>
+        <p>
+          <em>Isolated</em> — private nets, empty map. The control.
+          <em>Blackboard</em> — still private nets, but they share the map, so
+          coordination can start before weights agree.
+          <em>Hive</em> — one pack net trained on every hunter’s trajectory.
+          A kill by drone 4 updates the brain drone 2 is flying.
+        </p>
+      </article>
+      <article>
+        <h2>Swarm logic</h2>
+        <p>
+          Roles are assigned from geometry: point, left flank, right flank,
+          cutter. Reynolds separation keeps them from stacking. Coupling mixes
+          those turns into the learned yaw. Turn it to zero to watch the net
+          fly without a formation overlay.
+        </p>
+      </article>
+      <article>
+        <h2>Same physics as dogfight</h2>
+        <p>
+          Constant speed, yaw capped by speed ÷ turn radius, bullets that never
+          steer. A sortie ends when the chased plane dies, the pack is wiped,
+          or the clock runs out. Timeout with the prey still up is an escape.
+        </p>
+      </article>
+    </section>
+
+    <footer>
+      <p>Chi3-labs · swarm memory</p>
+    </footer>
+    <script src="static/app.js?v=swarm1" type="module"></script>
+  </body>
+</html>

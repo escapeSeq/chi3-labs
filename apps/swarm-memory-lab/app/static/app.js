@@ -1,0 +1,745 @@
+const $ = (id) => document.getElementById(id);
+function text(id, value) {
+  const el = $(id);
+  if (el) el.textContent = value;
+}
+
+const PALETTE = ["#e85d4c", "#3db8c5", "#e6c36a", "#7c6bff", "#5dce8a", "#e07ab5", "#f08a4b", "#8aa09a"];
+const PLANES_MIN = 3;
+const PLANES_MAX = 8;
+const TIMEOUT_MIN = 10;
+const TIMEOUT_MAX = 600;
+const TIMEOUT_DT = 0.05;
+const BURST_REPORT = 10_000;
+const OUTCOMES = {
+  escape: "escaped",
+  wipe: "pack wiped",
+  clean_hunt: "clean hunt",
+  hunt: "pack scored",
+  prey_crash: "prey crashed",
+  midair: "midair",
+  failure: "timeout loss",
+  win: "last plane",
+};
+
+const state = {
+  timer: null,
+  nextTimer: null,
+  frames: [],
+  i: 0,
+  curve: [],
+  physics: { turn_radius: 0.06, arena: 1, n_planes: 5, dt: 0.05 },
+  running: true,
+  busy: false,
+  timeoutDirty: false,
+  planesDirty: false,
+  modeDirty: false,
+  shareDirty: false,
+  gainsDirty: false,
+  mode: "hunt",
+  share: "hive",
+  roster: [],
+  lineup: [],
+  bursting: false,
+  burstTimer: null,
+  burstShown: 0,
+};
+
+const field = $("field");
+const fctx = field.getContext("2d");
+
+function seatColor(i) {
+  return PALETTE[i % PALETTE.length];
+}
+
+function xy(v) {
+  const pad = 28;
+  return pad + v * (field.width - pad * 2);
+}
+
+function clamp(n, lo, hi) {
+  return Math.min(hi, Math.max(lo, n));
+}
+
+function shareMode() {
+  const v = $("share")?.value || state.share;
+  if (v === "isolated" || v === "blackboard") return v;
+  return "hive";
+}
+
+function fightMode() {
+  return state.mode === "ffa" ? "ffa" : "hunt";
+}
+
+function planeCount() {
+  const n = Number($("planes-num").value);
+  if (!Number.isFinite(n)) return PLANES_MIN;
+  return clamp(Math.round(n), PLANES_MIN, PLANES_MAX);
+}
+
+function timeoutSeconds() {
+  const n = Number($("timeout-num").value);
+  if (!Number.isFinite(n)) return 120;
+  return clamp(Math.round(n), TIMEOUT_MIN, TIMEOUT_MAX);
+}
+
+function gainValue(id) {
+  return clamp(Number($(id).value) / 100, 0, 1);
+}
+
+function syncCopy(n) {
+  const v = n ?? planeCount();
+  const hunt = fightMode() === "hunt";
+  const share = shareMode();
+  const pack = Math.max(0, v - (hunt ? 1 : 0));
+  const shareLine =
+    share === "hive"
+      ? `${pack} hunt from one hive`
+      : share === "blackboard"
+        ? `${pack} private nets on one map`
+        : `${pack} private nets, radio off`;
+  text("planes-read", hunt ? `${v} drones · P1 chased, ${shareLine}` : `${v} drones · ${shareLine}`);
+  text("matchup-read", `${v} drones · ${share}`);
+  text(
+    "field-hint",
+    hunt
+      ? "P1 is chased. Amber heat is prey scent written by hunters who can still see it."
+      : "Free-for-all. Shared memory still paints traffic, danger, and kill cells."
+  );
+}
+
+function setPlaneCount(n) {
+  const v = clamp(Math.round(Number(n) || PLANES_MIN), PLANES_MIN, PLANES_MAX);
+  $("planes").value = String(v);
+  $("planes-num").value = String(v);
+  syncCopy(v);
+}
+
+function setTimeoutSeconds(seconds) {
+  const v = clamp(Math.round(seconds), TIMEOUT_MIN, TIMEOUT_MAX);
+  $("timeout").value = String(v);
+  $("timeout-num").value = String(v);
+  const steps = Math.round(v / (state.physics.dt || TIMEOUT_DT));
+  text("timeout-read", `${v} s · ${steps} steps`);
+}
+
+function setGain(id, readId, value, suffix) {
+  const v = clamp(Number(value), 0, 1);
+  $(id).value = String(Math.round(v * 100));
+  text(readId, `${v.toFixed(2)} · ${suffix}`);
+}
+
+async function pushJson(url, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Request failed");
+  return data;
+}
+
+async function pushTimeout() {
+  const seconds = timeoutSeconds();
+  setTimeoutSeconds(seconds);
+  try {
+    const body = await pushJson("api/timeout", { seconds });
+    state.timeoutDirty = false;
+    applyStatus(body);
+    $("status").textContent = `Sortie timeout set to ${seconds}s.`;
+  } catch (err) {
+    state.timeoutDirty = false;
+    $("status").textContent = err.message;
+  }
+}
+
+async function pushPlanes() {
+  const n = planeCount();
+  setPlaneCount(n);
+  try {
+    const body = await pushJson("api/planes", { n });
+    state.planesDirty = false;
+    applyStatus(body);
+    $("status").textContent = `Next fight has ${n} drones.`;
+  } catch (err) {
+    state.planesDirty = false;
+    $("status").textContent = err.message;
+  }
+}
+
+async function pushMode() {
+  const mode = $("mode").value === "ffa" ? "ffa" : "hunt";
+  state.mode = mode;
+  try {
+    const body = await pushJson("api/mode", { mode });
+    state.modeDirty = false;
+    applyStatus(body);
+    $("status").textContent = mode === "hunt" ? "One against the pack." : "Last plane standing.";
+    restartFlights();
+  } catch (err) {
+    state.modeDirty = false;
+    $("status").textContent = err.message;
+  }
+}
+
+async function pushShare() {
+  const share = shareMode();
+  state.share = share;
+  try {
+    const body = await pushJson("api/share", { share });
+    state.shareDirty = false;
+    applyStatus(body);
+    const copy = {
+      hive: "Hive on. One pack net, shared map, pooled trajectories.",
+      blackboard: "Blackboard on. Private nets, shared map.",
+      isolated: "Isolated. Private nets, radio off.",
+    };
+    $("status").textContent = copy[share];
+    restartFlights();
+  } catch (err) {
+    state.shareDirty = false;
+    $("status").textContent = err.message;
+  }
+}
+
+async function pushGains() {
+  const swarm = gainValue("swarm-gain");
+  const memory = gainValue("memory-gain");
+  setGain("swarm-gain", "swarm-read", swarm, "flocking + hunt roles mix into yaw");
+  setGain("memory-gain", "memory-read", memory, "follow the shared prey scent");
+  try {
+    const body = await pushJson("api/gains", { swarm_gain: swarm, memory_gain: memory });
+    state.gainsDirty = false;
+    applyStatus(body);
+  } catch (err) {
+    state.gainsDirty = false;
+    $("status").textContent = err.message;
+  }
+}
+
+$("timeout").addEventListener("input", () => {
+  state.timeoutDirty = true;
+  setTimeoutSeconds(Number($("timeout").value));
+});
+$("timeout").addEventListener("change", pushTimeout);
+$("timeout-num").addEventListener("change", () => {
+  state.timeoutDirty = true;
+  setTimeoutSeconds(timeoutSeconds());
+  pushTimeout();
+});
+$("planes").addEventListener("input", () => {
+  state.planesDirty = true;
+  setPlaneCount(Number($("planes").value));
+});
+$("planes").addEventListener("change", pushPlanes);
+$("planes-num").addEventListener("change", () => {
+  state.planesDirty = true;
+  setPlaneCount(planeCount());
+  pushPlanes();
+});
+$("mode").addEventListener("change", () => {
+  state.modeDirty = true;
+  state.mode = $("mode").value;
+  syncCopy();
+  pushMode();
+});
+$("share").addEventListener("change", () => {
+  state.shareDirty = true;
+  state.share = shareMode();
+  syncCopy();
+  pushShare();
+});
+$("swarm-gain").addEventListener("input", () => {
+  state.gainsDirty = true;
+  setGain("swarm-gain", "swarm-read", gainValue("swarm-gain"), "flocking + hunt roles mix into yaw");
+});
+$("swarm-gain").addEventListener("change", pushGains);
+$("memory-gain").addEventListener("input", () => {
+  state.gainsDirty = true;
+  setGain("memory-gain", "memory-read", gainValue("memory-gain"), "follow the shared prey scent");
+});
+$("memory-gain").addEventListener("change", pushGains);
+
+function pauseFlights() {
+  state.running = false;
+  stopPlay();
+  $("pause").textContent = "Resume flights";
+}
+
+function resumeFlights() {
+  state.running = true;
+  $("pause").textContent = "Pause flights";
+  loopSortie();
+}
+
+function restartFlights() {
+  if (state.running) {
+    pauseFlights();
+    resumeFlights();
+  } else {
+    drawEmpty();
+  }
+}
+
+$("pause").addEventListener("click", () => {
+  if (state.running) pauseFlights();
+  else resumeFlights();
+});
+
+$("wipe-memory").addEventListener("click", async () => {
+  try {
+    const body = await pushJson("api/reset-memory", {});
+    applyStatus(body);
+    $("status").textContent = "Shared map wiped. Scent, danger, and kill heat are gone.";
+    paintMemory(body.memory);
+  } catch (err) {
+    $("status").textContent = err.message;
+  }
+});
+
+function setBurstControls(on) {
+  state.bursting = on;
+  $("burst").classList.toggle("is-on", on);
+  $("burst").setAttribute("aria-pressed", on ? "true" : "false");
+  $("burst").textContent = on ? "Burst training on" : "Burst training off";
+}
+
+function burstMilestone(n) {
+  return Math.floor(Number(n || 0) / BURST_REPORT) * BURST_REPORT;
+}
+
+function startBurstPoll() {
+  stopBurstPoll();
+  state.burstTimer = setInterval(async () => {
+    try {
+      const burst = await (await fetch("api/burst")).json();
+      const shown = burstMilestone(burst.trained);
+      if (shown !== state.burstShown) {
+        state.burstShown = shown;
+        text("burst-read", shown ? `Burst training · ${shown.toLocaleString()} sorties` : "Burst training · 0 sorties");
+      }
+      if (!burst.running) {
+        stopBurstPoll();
+        setBurstControls(false);
+        const snap = await (await fetch("api/state")).json();
+        applyStatus(snap);
+        $("status").textContent = burst.error ? `Burst stopped: ${burst.error}` : "Burst training stopped.";
+        resumeFlights();
+      }
+    } catch (err) {
+      $("status").textContent = err.message;
+    }
+  }, 1200);
+}
+
+function stopBurstPoll() {
+  if (state.burstTimer) {
+    clearInterval(state.burstTimer);
+    state.burstTimer = null;
+  }
+}
+
+$("burst").addEventListener("click", async () => {
+  try {
+    if (state.bursting) {
+      const body = await pushJson("api/burst/stop", {});
+      applyStatus(body);
+      setBurstControls(false);
+      stopBurstPoll();
+      $("status").textContent = "Stopping burst after the current sortie.";
+      return;
+    }
+    pauseFlights();
+    const body = await pushJson("api/burst/start", {});
+    applyStatus(body);
+    setBurstControls(true);
+    state.burstShown = 0;
+    text("burst-read", "Burst training · 0 sorties");
+    $("status").textContent = "Burst training. Counter updates every 10,000 sorties.";
+    startBurstPoll();
+  } catch (err) {
+    $("status").textContent = err.message;
+  }
+});
+
+function stopPlay() {
+  if (state.timer != null) {
+    clearInterval(state.timer);
+    state.timer = null;
+  }
+  if (state.nextTimer != null) {
+    clearTimeout(state.nextTimer);
+    state.nextTimer = null;
+  }
+}
+
+function drawEmpty() {
+  drawField({ planes: [], bullets: [], events: [], memory: null, t: 0 });
+  $("field-caption").textContent = "No sortie on the field yet.";
+}
+
+function drawField(frame) {
+  const ctx = fctx;
+  const w = field.width;
+  ctx.fillStyle = "#081014";
+  ctx.fillRect(0, 0, w, field.height);
+  paintHeat(ctx, frame.memory);
+  ctx.strokeStyle = "rgba(231,239,230,0.08)";
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 8; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(xy(i / 8), xy(0));
+    ctx.lineTo(xy(i / 8), xy(1));
+    ctx.moveTo(xy(0), xy(i / 8));
+    ctx.lineTo(xy(1), xy(i / 8));
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "rgba(230,195,106,0.35)";
+  ctx.strokeRect(xy(0), xy(0), xy(1) - xy(0), xy(1) - xy(0));
+  const sense = state.physics.sense_range || 0.4;
+  const planes = frame.planes || [];
+  const prey = planes.find((p) => p.role === "prey" && p.alive);
+  if (prey) {
+    ctx.beginPath();
+    ctx.arc(xy(prey.x), xy(prey.y), sense * (field.width - 56), 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(230,195,106,0.18)";
+    ctx.setLineDash([4, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  for (const link of frame.links || []) {
+    ctx.beginPath();
+    ctx.moveTo(xy(link.x0), xy(link.y0));
+    ctx.lineTo(xy(link.x1), xy(link.y1));
+    ctx.strokeStyle = "rgba(61,184,197,0.35)";
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+  }
+  planes.forEach((p, i) => drawPlane(ctx, p, seatColor(p.seat ?? i)));
+  for (const b of frame.bullets || []) {
+    ctx.fillStyle = "#e6c36a";
+    ctx.beginPath();
+    ctx.arc(xy(b.x), xy(b.y), 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(230,195,106,0.7)";
+    ctx.beginPath();
+    ctx.moveTo(xy(b.x), xy(b.y));
+    ctx.lineTo(xy(b.x + 0.03 * Math.cos(b.heading)), xy(b.y + 0.03 * Math.sin(b.heading)));
+    ctx.stroke();
+  }
+}
+
+function paintHeat(ctx, memory) {
+  const layers = memory?.layers;
+  if (!layers) return;
+  const grid = memory.grid || layers.prey?.length || 16;
+  const cell = (field.width - 56) / grid;
+  const origin = 28;
+  for (let j = 0; j < grid; j += 1) {
+    for (let i = 0; i < grid; i += 1) {
+      const prey = layers.prey?.[j]?.[i] || 0;
+      const kill = layers.kill?.[j]?.[i] || 0;
+      const danger = layers.danger?.[j]?.[i] || 0;
+      const traffic = layers.traffic?.[j]?.[i] || 0;
+      const a = Math.min(1, prey * 0.9 + kill * 0.7 + danger * 0.55 + traffic * 0.35);
+      if (a < 0.04) continue;
+      const r = Math.min(255, 230 * prey + 232 * danger);
+      const g = Math.min(255, 195 * prey + 184 * kill + 206 * traffic);
+      const b = Math.min(255, 106 * prey + 197 * kill + 76 * danger + 138 * traffic);
+      ctx.fillStyle = `rgba(${r | 0},${g | 0},${b | 0},${0.12 + 0.42 * a})`;
+      ctx.fillRect(origin + i * cell, origin + j * cell, cell + 0.4, cell + 0.4);
+    }
+  }
+}
+
+function drawPlane(ctx, p, color) {
+  if (!p) return;
+  const x = xy(p.x);
+  const y = xy(p.y);
+  const r = state.physics.turn_radius || 0.06;
+  if (p.alive) {
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.22;
+    ctx.lineWidth = 1;
+    const left = p.heading + Math.PI / 2;
+    const right = p.heading - Math.PI / 2;
+    for (const side of [left, right]) {
+      ctx.beginPath();
+      ctx.arc(xy(p.x + r * Math.cos(side)), xy(p.y + r * Math.sin(side)), r * (field.width - 56), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  if (p.role === "prey" && p.alive) {
+    ctx.beginPath();
+    ctx.arc(x, y, 18, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(230,195,106,0.7)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(p.heading);
+  ctx.fillStyle = p.alive ? color : "rgba(138,160,154,0.35)";
+  ctx.beginPath();
+  ctx.moveTo(14, 0);
+  ctx.lineTo(-10, 7);
+  ctx.lineTo(-6, 0);
+  ctx.lineTo(-10, -7);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  const role = p.swarm_role && p.swarm_role !== "prey" ? p.swarm_role.replace("_", " ") : "";
+  const tag = [p.brain_label || p.brain_id, role].filter(Boolean).join(" · ");
+  if (tag) {
+    ctx.fillStyle = "rgba(231,239,230,0.72)";
+    ctx.font = "10px ui-monospace, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(tag, x, y + 18);
+  }
+}
+
+function paintMemory(memory) {
+  const canvas = $("memory-map");
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#081014";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const energy = memory?.energy || {};
+  text("mem-prey", (energy.prey ?? 0).toFixed(1));
+  text("mem-kill", (energy.kill ?? 0).toFixed(1));
+  text("mem-danger", (energy.danger ?? 0).toFixed(1));
+  text("mem-traffic", (energy.traffic ?? 0).toFixed(1));
+  const layers = memory?.layers;
+  if (!layers) {
+    ctx.fillStyle = "#8aa09a";
+    ctx.font = "13px ui-monospace, monospace";
+    ctx.fillText("Map off in isolated mode.", 24, 36);
+    return;
+  }
+  const grid = memory.grid || 16;
+  const cw = canvas.width / grid;
+  const ch = canvas.height / grid;
+  for (let j = 0; j < grid; j += 1) {
+    for (let i = 0; i < grid; i += 1) {
+      const prey = layers.prey?.[j]?.[i] || 0;
+      const kill = layers.kill?.[j]?.[i] || 0;
+      const danger = layers.danger?.[j]?.[i] || 0;
+      const traffic = layers.traffic?.[j]?.[i] || 0;
+      const r = Math.min(255, 40 + 210 * prey + 180 * danger);
+      const g = Math.min(255, 40 + 160 * prey + 180 * kill + 160 * traffic);
+      const b = Math.min(255, 40 + 80 * prey + 180 * kill + 90 * danger);
+      const a = Math.min(1, 0.15 + prey + kill + danger + traffic);
+      ctx.fillStyle = `rgba(${r | 0},${g | 0},${b | 0},${a})`;
+      ctx.fillRect(i * cw, j * ch, cw + 0.4, ch + 0.4);
+    }
+  }
+  const prey = memory.prey;
+  if (prey && prey.mass > 0.05) {
+    ctx.beginPath();
+    ctx.arc(prey.x * canvas.width, prey.y * canvas.height, 8 + 14 * Math.min(1, prey.mass), 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(230,195,106,0.9)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+}
+
+function paintChart(curve) {
+  const canvas = $("chart");
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#081014";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (curve.length < 2) return;
+  const lives = curve.map((r) => r.steps);
+  const hunts = curve.map((r) => (r.outcome && r.winner !== "prey" && r.mode !== "ffa" ? 1 : r.outcome === "win" ? 1 : 0));
+  const maxL = Math.max(...lives, 1);
+  const line = (series, color, maxV) => {
+    ctx.beginPath();
+    series.forEach((v, i) => {
+      const x = 10 + (i / Math.max(series.length - 1, 1)) * (canvas.width - 20);
+      const y = canvas.height - 12 - (v / maxV) * (canvas.height - 28);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  };
+  line(lives, "#e6c36a", maxL);
+  const window = 8;
+  const rate = hunts.map((_, i) => {
+    const slice = hunts.slice(Math.max(0, i - window + 1), i + 1);
+    return slice.reduce((s, v) => s + v, 0) / slice.length;
+  });
+  line(
+    rate.map((v) => v * maxL),
+    "#3db8c5",
+    maxL
+  );
+  ctx.fillStyle = "#8aa09a";
+  ctx.font = "11px ui-monospace, monospace";
+  ctx.fillText("life (amber) · pack finish rate (cyan)", 12, 14);
+}
+
+function renderHangar() {
+  const host = $("hangar");
+  if (!host) return;
+  const lineup = state.lineup || [];
+  const table = document.createElement("table");
+  table.className = "stat-table";
+  table.innerHTML = `<thead><tr><th>Seat</th><th>Brain</th><th>Role</th><th class="num">Kills</th><th class="num">Walls</th><th class="num">Updates</th><th>Fav</th></tr></thead>`;
+  const tbody = document.createElement("tbody");
+  lineup.forEach((slot, i) => {
+    const brain = state.roster.find((row) => row.id === slot.brain_id) || {};
+    const tr = document.createElement("tr");
+    const seat = document.createElement("td");
+    const label = document.createElement("span");
+    label.className = fightMode() === "hunt" && i === 0 ? "seat is-prey" : "seat";
+    const swatch = document.createElement("i");
+    swatch.className = "swatch";
+    swatch.style.background = seatColor(i);
+    label.append(swatch, document.createTextNode(`P${i + 1}`));
+    seat.append(label);
+    const role = fightMode() === "hunt" ? (i === 0 ? "chased" : "hunter") : "ffa";
+    tr.append(
+      seat,
+      cell(brain.label || slot.brain_id),
+      cell(role),
+      cell(brain.kills ?? 0, "num"),
+      cell(brain.walls ?? 0, "num"),
+      cell(brain.updates ?? 0, "num"),
+      cell(brain.favorite || "—")
+    );
+    tbody.append(tr);
+  });
+  table.append(tbody);
+  host.replaceChildren(table);
+}
+
+function cell(value, className) {
+  const td = document.createElement("td");
+  if (className) td.className = className;
+  td.textContent = value == null ? "—" : String(value);
+  return td;
+}
+
+function renderWinStrip(score) {
+  const host = $("win-strip");
+  if (!host) return;
+  host.replaceChildren();
+  const chip = document.createElement("span");
+  chip.className = "win-chip pack";
+  if (fightMode() === "hunt") {
+    chip.textContent = `escapes ${score.escapes || 0} · hunts ${score.hunts || 0} · clean ${score.clean_hunts || 0} · wipes ${score.pack_wipes || 0} · pack lost ${score.pack_losses || 0}`;
+  } else {
+    chip.textContent = `timeout losses ${score.draws || 0} · midairs ${score.midairs || 0}`;
+  }
+  host.append(chip);
+}
+
+function applyStatus(body) {
+  state.roster = body.roster || [];
+  state.lineup = body.lineup || [];
+  state.mode = body.mode || state.mode;
+  state.share = body.share || state.share;
+  if (!state.modeDirty && $("mode")) $("mode").value = state.mode;
+  if (!state.shareDirty && $("share")) $("share").value = state.share;
+  const s = body.score || {};
+  text("episode-read", String(s.episodes || 0));
+  text("winner-read", OUTCOMES[s.last_outcome] || s.last_winner || "—");
+  text("hunt-read", fightMode() === "hunt" ? `${s.hunts || 0} · ${s.escapes || 0}` : `${s.draws || 0} · ${s.midairs || 0}`);
+  $("empty-badge").textContent = body.empty ? "brains empty" : "learning in progress";
+  $("empty-badge").classList.toggle("is-trained", !body.empty);
+  renderWinStrip(s);
+  renderHangar();
+  if (body.physics) {
+    state.physics = body.physics;
+    if (!state.timeoutDirty && body.physics.timeout != null) setTimeoutSeconds(body.physics.timeout);
+    if (!state.planesDirty && body.physics.n_planes != null) setPlaneCount(body.physics.n_planes);
+    else syncCopy();
+    if (!state.gainsDirty) {
+      if (body.physics.swarm_gain != null) setGain("swarm-gain", "swarm-read", body.physics.swarm_gain, "flocking + hunt roles mix into yaw");
+      if (body.physics.memory_gain != null) setGain("memory-gain", "memory-read", body.physics.memory_gain, "follow the shared prey scent");
+    }
+  } else {
+    syncCopy();
+  }
+  paintMemory(body.memory);
+  if (body.curve) {
+    state.curve = body.curve;
+    paintChart(body.curve);
+    if (!body.curve.length) {
+      text(
+        "lesson-note",
+        shareMode() === "isolated"
+          ? "No radio. Each hunter only learns from its own mistakes."
+          : shareMode() === "blackboard"
+            ? "Private nets, public map. Scent is the only thing they share."
+            : "Hive on. Every hunter's trajectory trains the same pack net."
+      );
+    }
+  }
+}
+
+function playTrace(frames, summary, onDone) {
+  stopPlay();
+  state.frames = frames || [];
+  state.i = 0;
+  if (!state.frames.length) {
+    if (onDone) onDone();
+    return;
+  }
+  const tick = () => {
+    const frame = state.frames[state.i];
+    drawField(frame);
+    if (frame.memory) paintMemory(frame.memory);
+    const ev = frame.events[frame.events.length - 1] || "in the merge";
+    $("field-caption").textContent = `t = ${frame.t.toFixed(2)}s · ${String(ev).replaceAll("_", " ")} · ${state.i + 1}/${state.frames.length}`;
+    state.i += 1;
+    if (state.i >= state.frames.length) {
+      stopPlay();
+      if (summary?.events?.length) {
+        $("field-caption").textContent = `Ended: ${summary.events.join(", ").replaceAll("_", " ")} — next sortie starting`;
+      }
+      if (onDone) state.nextTimer = setTimeout(onDone, 700);
+    }
+  };
+  tick();
+  state.timer = setInterval(tick, 40);
+}
+
+async function loopSortie() {
+  if (!state.running || state.busy || state.bursting) return;
+  state.busy = true;
+  try {
+    const res = await fetch("api/sortie", { method: "POST" });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail || "Sortie failed");
+    applyStatus(body);
+    playTrace(body.trace, body.summary, () => {
+      state.busy = false;
+      if (state.running) loopSortie();
+    });
+  } catch (err) {
+    state.busy = false;
+    $("status").textContent = err.message;
+    if (state.running) state.nextTimer = setTimeout(loopSortie, 1200);
+  }
+}
+
+async function boot() {
+  const snap = await (await fetch("api/state")).json();
+  applyStatus(snap);
+  drawEmpty();
+  if (snap.burst?.running) {
+    setBurstControls(true);
+    state.burstShown = burstMilestone(snap.burst.trained);
+    text("burst-read", state.burstShown ? `Burst training · ${state.burstShown.toLocaleString()} sorties` : "Burst training · 0 sorties");
+    pauseFlights();
+    startBurstPoll();
+    return;
+  }
+  resumeFlights();
+}
+
+boot();

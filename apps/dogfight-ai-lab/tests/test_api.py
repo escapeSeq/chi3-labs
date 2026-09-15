@@ -29,18 +29,20 @@ def test_health_and_index():
     assert "Graph" in page.text
     assert 'id="winner-read"' in page.text
     assert "red-kills" not in page.text
-    assert 'href="static/styles.css?v=full-obs"' in page.text
-    assert 'src="static/app.js?v=full-obs"' in page.text
+    assert 'href="static/styles.css?v=draw-loss"' in page.text
+    assert 'src="static/app.js?v=draw-loss"' in page.text
     js = client.get("/static/app.js")
     assert js.status_code == 200
     assert "red-kills" not in js.text
     assert "winner-read" in js.text
+    assert "timeout loss" in js.text
     assert page.headers.get("cache-control") == "no-store"
     assert "Numbers" in page.text
     assert "/data" in page.text
     assert "Reset statistics" not in page.text
     assert "Wipe all brains" not in page.text
     assert "Sortie timeout" in page.text
+    assert "loss if more than one is still up" in page.text
     assert "Planes in the fight" in page.text
     assert "Last plane standing" in page.text
     assert "One against the pack" in page.text
