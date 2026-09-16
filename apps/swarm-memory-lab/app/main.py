@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -52,7 +52,16 @@ class TimeoutIn(BaseModel):
 
 
 class PlanesIn(BaseModel):
-    n: int = Field(default=5, ge=3, le=8)
+    n: int = Field(default=5, ge=2, le=8)
+
+
+class TeamCountIn(BaseModel):
+    n: Optional[int] = Field(default=None, ge=1, le=8)
+    delta: Optional[int] = Field(default=None, ge=-8, le=8)
+
+
+class BrainIn(BaseModel):
+    brain: str = Field(default="prey", min_length=3, max_length=16)
 
 
 class ModeIn(BaseModel):
@@ -106,8 +115,12 @@ def _status() -> dict:
             "min_timeout": physics.seconds_from_steps(physics.MIN_STEPS),
             "max_timeout": physics.seconds_from_steps(physics.MAX_STEPS_CAP),
             "n_planes": ACADEMY.n_planes,
+            "n_prey": ACADEMY.n_prey,
+            "n_hive": ACADEMY.n_hive,
             "min_planes": physics.MIN_PLANES,
             "max_planes": physics.MAX_PLANES,
+            "min_prey": physics.MIN_PREY,
+            "min_hive": physics.MIN_HIVE,
             "swarm_gain": ACADEMY.swarm_gain,
             "memory_gain": ACADEMY.memory_gain,
         },
@@ -142,6 +155,15 @@ def reset_memory() -> dict:
     return _status()
 
 
+@app.post("/api/reset-brain")
+def reset_brain(body: BrainIn) -> dict:
+    try:
+        ACADEMY.reset_brain(body.brain)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _status()
+
+
 @app.post("/api/timeout")
 def timeout(body: TimeoutIn) -> dict:
     ACADEMY.set_max_steps(physics.steps_from_seconds(body.seconds))
@@ -151,6 +173,26 @@ def timeout(body: TimeoutIn) -> dict:
 @app.post("/api/planes")
 def planes(body: PlanesIn) -> dict:
     ACADEMY.set_n_planes(body.n)
+    return _status()
+
+
+@app.post("/api/prey")
+def prey_count(body: Optional[TeamCountIn] = None) -> dict:
+    body = body or TeamCountIn()
+    if body.n is not None:
+        ACADEMY.set_n_prey(body.n)
+    elif body.delta:
+        ACADEMY.set_n_prey(ACADEMY.n_prey + int(body.delta))
+    return _status()
+
+
+@app.post("/api/hive")
+def hive_count(body: Optional[TeamCountIn] = None) -> dict:
+    body = body or TeamCountIn()
+    if body.n is not None:
+        ACADEMY.set_n_hive(body.n)
+    elif body.delta:
+        ACADEMY.set_n_hive(ACADEMY.n_hive + int(body.delta))
     return _status()
 
 

@@ -10,7 +10,8 @@ client = TestClient(app)
 def setup_function() -> None:
     ACADEMY.reset_models(persist=False)
     ACADEMY.set_max_steps(400, persist=False)
-    ACADEMY.set_n_planes(DEFAULT_PLANES, persist=False)
+    ACADEMY.set_n_prey(1, persist=False)
+    ACADEMY.set_n_hive(DEFAULT_PLANES - 1, persist=False)
     ACADEMY.set_share("hive", persist=False)
     ACADEMY.set_mode("hunt", persist=False)
 
@@ -25,12 +26,18 @@ def test_health_and_index():
     assert "Blackboard" in page.text
     assert "Isolated" in page.text
     assert "One against the pack" in page.text
+    assert "Wipe the prey brain" in page.text
+    assert "Wipe the hive brain" in page.text
     assert 'id="share"' in page.text
-    assert 'href="static/styles.css?v=swarm1"' in page.text
-    assert 'src="static/app.js?v=swarm1"' in page.text
+    assert 'id="prey-plus"' in page.text
+    assert 'id="hive-plus"' in page.text
+    assert 'href="static/styles.css?v=swarm2"' in page.text
+    assert 'src="static/app.js?v=swarm2"' in page.text
     js = client.get("/static/app.js")
     assert js.status_code == 200
     assert "api/share" in js.text
+    assert "api/reset-brain" in js.text
+    assert "api/prey" in js.text
     assert page.headers.get("cache-control") == "no-store"
 
 
@@ -40,19 +47,22 @@ def test_state_defaults():
     assert body["share"] == "hive"
     assert body["mode"] == "hunt"
     assert body["physics"]["n_planes"] == DEFAULT_PLANES
+    assert body["physics"]["n_prey"] == 1
+    assert body["physics"]["n_hive"] == DEFAULT_PLANES - 1
     assert body["memory_on"] is True
     assert len(body["lineup"]) == DEFAULT_PLANES
     assert body["lineup"][0]["brain_id"] == "prey"
     assert {slot["brain_id"] for slot in body["lineup"][1:]} == {"hive"}
+    assert {row["id"] for row in body["roster"]} == {"prey", "hive"}
 
 
-def test_share_isolated_uses_private_drones():
+def test_share_isolated_still_uses_two_brains():
     body = client.post("/api/share", json={"share": "isolated"}).json()
     assert body["share"] == "isolated"
     assert body["memory_on"] is False
     ids = [slot["brain_id"] for slot in body["lineup"]]
     assert ids[0] == "prey"
-    assert ids[1:] == [f"d{i}" for i in range(1, DEFAULT_PLANES)]
+    assert set(ids[1:]) == {"hive"}
 
 
 def test_lesson_and_watch():
@@ -94,3 +104,32 @@ def test_gains_and_planes():
     timeout = client.post("/api/timeout", json={"seconds": 20}).json()
     assert timeout["physics"]["timeout"] == 20
     assert ACADEMY.max_steps < MAX_STEPS
+
+
+def test_add_prey_and_hive_individually():
+    prey = client.post("/api/prey", json={"n": 2}).json()
+    assert prey["physics"]["n_prey"] == 2
+    assert prey["physics"]["n_hive"] == DEFAULT_PLANES - 1
+    hive = client.post("/api/hive", json={"delta": 1}).json()
+    assert hive["physics"]["n_hive"] == DEFAULT_PLANES
+    assert hive["physics"]["n_prey"] == 2
+    brains = {slot["brain_id"] for slot in hive["lineup"]}
+    assert brains == {"prey", "hive"}
+    assert sum(1 for slot in hive["lineup"] if slot["brain_id"] == "prey") == 2
+    assert sum(1 for slot in hive["lineup"] if slot["role"] == "prey") == 2
+
+
+def test_reset_brain_wipes_one_net():
+    client.post("/api/lesson", json={"episodes": 4, "lr": 0.015})
+    assert ACADEMY.prey.updates > 0
+    assert ACADEMY.hive.updates > 0
+    hive_updates = ACADEMY.hive.updates
+    wiped = client.post("/api/reset-brain", json={"brain": "prey"}).json()
+    assert ACADEMY.prey.updates == 0
+    assert ACADEMY.hive.updates == hive_updates
+    assert any(row["id"] == "prey" and row["updates"] == 0 for row in wiped["roster"])
+    hive = client.post("/api/reset-brain", json={"brain": "hive"}).json()
+    assert ACADEMY.hive.updates == 0
+    assert hive["empty"] is True
+    bad = client.post("/api/reset-brain", json={"brain": "nope"})
+    assert bad.status_code == 400

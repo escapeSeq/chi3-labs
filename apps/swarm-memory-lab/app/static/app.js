@@ -5,7 +5,8 @@ function text(id, value) {
 }
 
 const PALETTE = ["#e85d4c", "#3db8c5", "#e6c36a", "#7c6bff", "#5dce8a", "#e07ab5", "#f08a4b", "#8aa09a"];
-const PLANES_MIN = 3;
+const PREY_MIN = 1;
+const HIVE_MIN = 1;
 const PLANES_MAX = 8;
 const TIMEOUT_MIN = 10;
 const TIMEOUT_MAX = 600;
@@ -32,7 +33,8 @@ const state = {
   running: true,
   busy: false,
   timeoutDirty: false,
-  planesDirty: false,
+  preyDirty: false,
+  hiveDirty: false,
   modeDirty: false,
   shareDirty: false,
   gainsDirty: false,
@@ -71,10 +73,16 @@ function fightMode() {
   return state.mode === "ffa" ? "ffa" : "hunt";
 }
 
-function planeCount() {
-  const n = Number($("planes-num").value);
-  if (!Number.isFinite(n)) return PLANES_MIN;
-  return clamp(Math.round(n), PLANES_MIN, PLANES_MAX);
+function preyCount() {
+  const n = Number($("prey-num").value);
+  if (!Number.isFinite(n)) return PREY_MIN;
+  return clamp(Math.round(n), PREY_MIN, PLANES_MAX - HIVE_MIN);
+}
+
+function hiveCount() {
+  const n = Number($("hive-num").value);
+  if (!Number.isFinite(n)) return 4;
+  return clamp(Math.round(n), HIVE_MIN, PLANES_MAX - PREY_MIN);
 }
 
 function timeoutSeconds() {
@@ -87,32 +95,38 @@ function gainValue(id) {
   return clamp(Number($(id).value) / 100, 0, 1);
 }
 
-function syncCopy(n) {
-  const v = n ?? planeCount();
+function syncCopy(prey, hive) {
+  const p = prey ?? preyCount();
+  const h = hive ?? hiveCount();
   const hunt = fightMode() === "hunt";
   const share = shareMode();
-  const pack = Math.max(0, v - (hunt ? 1 : 0));
-  const shareLine =
-    share === "hive"
-      ? `${pack} hunt from one hive`
-      : share === "blackboard"
-        ? `${pack} private nets on one map`
-        : `${pack} private nets, radio off`;
-  text("planes-read", hunt ? `${v} drones · P1 chased, ${shareLine}` : `${v} drones · ${shareLine}`);
-  text("matchup-read", `${v} drones · ${share}`);
+  text("prey-read", `${p} prey · one shared prey brain`);
+  text("hive-read", `${h} hive · one shared hive brain`);
+  text("matchup-read", hunt ? `${p} prey · ${h} hive · ${share}` : `${p + h} drones · ${share}`);
   text(
     "field-hint",
     hunt
-      ? "P1 is chased. Amber heat is prey scent written by hunters who can still see it."
+      ? "Amber rings are prey. All prey share one brain; hunters share the hive."
       : "Free-for-all. Shared memory still paints traffic, danger, and kill cells."
   );
+  const plusOff = p + h >= PLANES_MAX;
+  if ($("prey-plus")) $("prey-plus").disabled = plusOff;
+  if ($("hive-plus")) $("hive-plus").disabled = plusOff;
+  if ($("prey-minus")) $("prey-minus").disabled = p <= PREY_MIN;
+  if ($("hive-minus")) $("hive-minus").disabled = h <= HIVE_MIN;
 }
 
-function setPlaneCount(n) {
-  const v = clamp(Math.round(Number(n) || PLANES_MIN), PLANES_MIN, PLANES_MAX);
-  $("planes").value = String(v);
-  $("planes-num").value = String(v);
-  syncCopy(v);
+function setTeamCounts(prey, hive) {
+  let p = clamp(Math.round(Number(prey) || PREY_MIN), PREY_MIN, PLANES_MAX - HIVE_MIN);
+  let h = clamp(Math.round(Number(hive) || HIVE_MIN), HIVE_MIN, PLANES_MAX - PREY_MIN);
+  while (p + h > PLANES_MAX) {
+    if (h > HIVE_MIN) h -= 1;
+    else if (p > PREY_MIN) p -= 1;
+    else break;
+  }
+  $("prey-num").value = String(p);
+  $("hive-num").value = String(h);
+  syncCopy(p, h);
 }
 
 function setTimeoutSeconds(seconds) {
@@ -154,16 +168,32 @@ async function pushTimeout() {
   }
 }
 
-async function pushPlanes() {
-  const n = planeCount();
-  setPlaneCount(n);
+async function pushPrey(n) {
+  const next = clamp(Math.round(Number(n)), PREY_MIN, PLANES_MAX - hiveCount());
+  setTeamCounts(next, hiveCount());
   try {
-    const body = await pushJson("api/planes", { n });
-    state.planesDirty = false;
+    const body = await pushJson("api/prey", { n: next });
+    state.preyDirty = false;
     applyStatus(body);
-    $("status").textContent = `Next fight has ${n} drones.`;
+    $("status").textContent = next === 1 ? "Next fight has 1 prey." : `Next fight has ${next} prey.`;
+    restartFlights();
   } catch (err) {
-    state.planesDirty = false;
+    state.preyDirty = false;
+    $("status").textContent = err.message;
+  }
+}
+
+async function pushHive(n) {
+  const next = clamp(Math.round(Number(n)), HIVE_MIN, PLANES_MAX - preyCount());
+  setTeamCounts(preyCount(), next);
+  try {
+    const body = await pushJson("api/hive", { n: next });
+    state.hiveDirty = false;
+    applyStatus(body);
+    $("status").textContent = next === 1 ? "Next fight has 1 hive drone." : `Next fight has ${next} hive drones.`;
+    restartFlights();
+  } catch (err) {
+    state.hiveDirty = false;
     $("status").textContent = err.message;
   }
 }
@@ -191,9 +221,9 @@ async function pushShare() {
     state.shareDirty = false;
     applyStatus(body);
     const copy = {
-      hive: "Hive on. One pack net, shared map, pooled trajectories.",
-      blackboard: "Blackboard on. Private nets, shared map.",
-      isolated: "Isolated. Private nets, radio off.",
+      hive: "Hive on. One prey brain, one hive brain, shared map.",
+      blackboard: "Blackboard on. Same two brains, shared map.",
+      isolated: "Isolated. Same two brains, radio off.",
     };
     $("status").textContent = copy[share];
     restartFlights();
@@ -228,15 +258,33 @@ $("timeout-num").addEventListener("change", () => {
   setTimeoutSeconds(timeoutSeconds());
   pushTimeout();
 });
-$("planes").addEventListener("input", () => {
-  state.planesDirty = true;
-  setPlaneCount(Number($("planes").value));
+$("prey-num").addEventListener("change", () => {
+  state.preyDirty = true;
+  pushPrey(preyCount());
 });
-$("planes").addEventListener("change", pushPlanes);
-$("planes-num").addEventListener("change", () => {
-  state.planesDirty = true;
-  setPlaneCount(planeCount());
-  pushPlanes();
+$("hive-num").addEventListener("change", () => {
+  state.hiveDirty = true;
+  pushHive(hiveCount());
+});
+$("prey-plus").addEventListener("click", () => {
+  if (preyCount() + hiveCount() >= PLANES_MAX) return;
+  state.preyDirty = true;
+  pushPrey(preyCount() + 1);
+});
+$("prey-minus").addEventListener("click", () => {
+  if (preyCount() <= PREY_MIN) return;
+  state.preyDirty = true;
+  pushPrey(preyCount() - 1);
+});
+$("hive-plus").addEventListener("click", () => {
+  if (preyCount() + hiveCount() >= PLANES_MAX) return;
+  state.hiveDirty = true;
+  pushHive(hiveCount() + 1);
+});
+$("hive-minus").addEventListener("click", () => {
+  if (hiveCount() <= HIVE_MIN) return;
+  state.hiveDirty = true;
+  pushHive(hiveCount() - 1);
 });
 $("mode").addEventListener("change", () => {
   state.modeDirty = true;
@@ -296,6 +344,59 @@ $("wipe-memory").addEventListener("click", async () => {
   } catch (err) {
     $("status").textContent = err.message;
   }
+});
+
+const wipeTimers = {};
+
+function resetWipeButton(id) {
+  const btn = $(id);
+  if (!btn) return;
+  btn.classList.remove("is-confirm");
+  btn.textContent = btn.dataset.label || btn.textContent;
+  if (wipeTimers[id]) {
+    clearTimeout(wipeTimers[id]);
+    wipeTimers[id] = null;
+  }
+}
+
+function armWipe(id, confirmText, onConfirm) {
+  const btn = $(id);
+  if (!btn) return;
+  if (btn.classList.contains("is-confirm")) {
+    resetWipeButton(id);
+    onConfirm();
+    return;
+  }
+  ["wipe-prey", "wipe-hive"].forEach((other) => {
+    if (other !== id) resetWipeButton(other);
+  });
+  btn.classList.add("is-confirm");
+  btn.textContent = confirmText;
+  wipeTimers[id] = setTimeout(() => resetWipeButton(id), 5000);
+}
+
+$("wipe-prey").addEventListener("click", () => {
+  armWipe("wipe-prey", "Confirm wipe prey brain", async () => {
+    try {
+      const body = await pushJson("api/reset-brain", { brain: "prey" });
+      applyStatus(body);
+      $("status").textContent = "Prey brain wiped. Every prey starts untrained.";
+    } catch (err) {
+      $("status").textContent = err.message;
+    }
+  });
+});
+
+$("wipe-hive").addEventListener("click", () => {
+  armWipe("wipe-hive", "Confirm wipe hive brain", async () => {
+    try {
+      const body = await pushJson("api/reset-brain", { brain: "hive" });
+      applyStatus(body);
+      $("status").textContent = "Hive brain wiped. Every hunter starts untrained.";
+    } catch (err) {
+      $("status").textContent = err.message;
+    }
+  });
 });
 
 function setBurstControls(on) {
@@ -399,8 +500,8 @@ function drawField(frame) {
   ctx.strokeRect(xy(0), xy(0), xy(1) - xy(0), xy(1) - xy(0));
   const sense = state.physics.sense_range || 0.4;
   const planes = frame.planes || [];
-  const prey = planes.find((p) => p.role === "prey" && p.alive);
-  if (prey) {
+  const livingPrey = planes.filter((p) => p.role === "prey" && p.alive);
+  for (const prey of livingPrey) {
     ctx.beginPath();
     ctx.arc(xy(prey.x), xy(prey.y), sense * (field.width - 56), 0, Math.PI * 2);
     ctx.strokeStyle = "rgba(230,195,106,0.18)";
@@ -591,20 +692,21 @@ function renderHangar() {
   const tbody = document.createElement("tbody");
   lineup.forEach((slot, i) => {
     const brain = state.roster.find((row) => row.id === slot.brain_id) || {};
+    const role = slot.role === "prey" || (fightMode() === "hunt" && slot.brain_id === "prey") ? "prey" : fightMode() === "hunt" ? "hunter" : "ffa";
     const tr = document.createElement("tr");
     const seat = document.createElement("td");
     const label = document.createElement("span");
-    label.className = fightMode() === "hunt" && i === 0 ? "seat is-prey" : "seat";
+    label.className = role === "prey" ? "seat is-prey" : "seat";
     const swatch = document.createElement("i");
     swatch.className = "swatch";
     swatch.style.background = seatColor(i);
     label.append(swatch, document.createTextNode(`P${i + 1}`));
     seat.append(label);
-    const role = fightMode() === "hunt" ? (i === 0 ? "chased" : "hunter") : "ffa";
+    const roleName = role === "prey" ? "prey" : role === "hunter" ? "hunter" : "ffa";
     tr.append(
       seat,
       cell(brain.label || slot.brain_id),
-      cell(role),
+      cell(roleName),
       cell(brain.kills ?? 0, "num"),
       cell(brain.walls ?? 0, "num"),
       cell(brain.updates ?? 0, "num"),
@@ -655,8 +757,11 @@ function applyStatus(body) {
   if (body.physics) {
     state.physics = body.physics;
     if (!state.timeoutDirty && body.physics.timeout != null) setTimeoutSeconds(body.physics.timeout);
-    if (!state.planesDirty && body.physics.n_planes != null) setPlaneCount(body.physics.n_planes);
-    else syncCopy();
+    if (!state.preyDirty && !state.hiveDirty && (body.physics.n_prey != null || body.physics.n_hive != null)) {
+      setTeamCounts(body.physics.n_prey ?? preyCount(), body.physics.n_hive ?? hiveCount());
+    } else {
+      syncCopy();
+    }
     if (!state.gainsDirty) {
       if (body.physics.swarm_gain != null) setGain("swarm-gain", "swarm-read", body.physics.swarm_gain, "flocking + hunt roles mix into yaw");
       if (body.physics.memory_gain != null) setGain("memory-gain", "memory-read", body.physics.memory_gain, "follow the shared prey scent");
@@ -672,10 +777,10 @@ function applyStatus(body) {
       text(
         "lesson-note",
         shareMode() === "isolated"
-          ? "No radio. Each hunter only learns from its own mistakes."
+          ? "Two brains, no radio. Each team still shares its own net."
           : shareMode() === "blackboard"
-            ? "Private nets, public map. Scent is the only thing they share."
-            : "Hive on. Every hunter's trajectory trains the same pack net."
+            ? "Two brains, public map. Scent is the only extra they share."
+            : "Two brains. Every prey trains prey; every hunter trains the hive."
       );
     }
   }

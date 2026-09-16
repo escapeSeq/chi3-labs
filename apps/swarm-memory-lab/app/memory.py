@@ -121,17 +121,17 @@ class SharedMemory:
 
     def watch(self, planes: list[Plane], new_events: list[str], pack_names: set[str], sense_range: float = 0.40) -> None:
         self.decay()
-        prey = next((p for p in planes if p.role == "prey"), None)
+        preys = [p for p in planes if p.role == "prey" and p.alive]
         for plane in planes:
             if not plane.alive:
                 continue
             if plane.role == "pack" or plane.name in pack_names:
                 self.splat("traffic", plane.x, plane.y, 0.28)
-                if prey is not None and prey.alive:
+                for prey in preys:
                     dist = float(np.hypot(plane.x - prey.x, plane.y - prey.y))
                     if dist <= sense_range:
                         self.splat("prey", prey.x, prey.y, 0.70)
-            elif prey is not None and plane.name == prey.name:
+            elif plane.role == "prey":
                 self.splat("prey", plane.x, plane.y, 0.12)
         for event in new_events:
             if event.endswith("_wall"):
@@ -149,6 +149,8 @@ class SharedMemory:
                 if shooter is not None:
                     self.splat("kill", shooter.x, shooter.y, 1.0)
                     self.hits += 1
-            elif event == "prey_down" and prey is not None:
-                self.splat("kill", prey.x, prey.y, 1.0)
+            elif event == "prey_down":
+                for prey in planes:
+                    if prey.role == "prey":
+                        self.splat("kill", prey.x, prey.y, 1.0)
                 self.hits += 1

@@ -19,9 +19,9 @@ def assign_roles(world: World) -> dict[str, str]:
     roles: dict[str, str] = {}
     prey = world.prey()
     pack = world.pack_living() if world.mode == "hunt" else []
-    if prey is None or not pack:
+    if prey is None or not prey.alive or not pack:
         for plane in world.planes:
-            plane.swarm_role = ""
+            plane.swarm_role = "prey" if plane.role == "prey" else ""
         return roles
     scored = []
     for plane in pack:
@@ -110,13 +110,16 @@ class SwarmForces:
 
 
 def forces(me: Plane, world: World, *, k_sep: float = 0.55, k_ali: float = 0.22, k_coh: float = 0.18, k_role: float = 0.85) -> SwarmForces:
-    if me.role == "prey" or not me.alive:
-        prey = world.prey()
+    if not me.alive:
+        return SwarmForces(0.0, 0.0, 0.0, 0.0, 0.0)
+    if me.role == "prey":
         hunters = world.pack_living()
-        if prey is None or me.name != (prey.name if prey else "") or not hunters:
+        if not hunters:
             return SwarmForces(0.0, 0.0, 0.0, 0.0, 0.0)
         nearest = min(hunters, key=lambda p: float(np.hypot(p.x - me.x, p.y - me.y)))
         flee = -_steer_toward(me, nearest.x, nearest.y)
+        mates = [p for p in world.preys_living() if p.name != me.name]
+        sep = _separation(me, mates)
         wall_turn = 0.0
         margin_l, margin_r = me.x, 1.0 - me.x
         margin_b, margin_t = me.y, 1.0 - me.y
@@ -124,8 +127,8 @@ def forces(me: Plane, world: World, *, k_sep: float = 0.55, k_ali: float = 0.22,
             inward_x = 0.5
             inward_y = 0.5
             wall_turn = _steer_toward(me, inward_x, inward_y)
-        mix = float(np.clip(0.65 * flee + 0.55 * wall_turn, -1.0, 1.0))
-        return SwarmForces(0.0, 0.0, 0.0, flee, mix)
+        mix = float(np.clip(0.65 * flee + 0.35 * sep + 0.55 * wall_turn, -1.0, 1.0))
+        return SwarmForces(sep, 0.0, 0.0, flee, mix)
     allies = [p for p in world.pack_living() if p.name != me.name] if world.mode == "hunt" else [p for p in world.living() if p.name != me.name]
     sep = _separation(me, allies)
     ali = _alignment(me, allies)

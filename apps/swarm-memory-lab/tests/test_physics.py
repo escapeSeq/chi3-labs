@@ -53,6 +53,21 @@ def test_hunt_roles_and_turns():
         assert -1.0 <= value <= 1.0
 
 
+def test_multiple_prey_bodies():
+    w = World(np.random.default_rng(8), n_planes=5, n_prey=2, mode="hunt")
+    assert len(w.preys()) == 2
+    assert len(w.pack()) == 3
+    assert all(p.role == "prey" for p in w.preys())
+    assert all(p.brain_id == "prey" for p in w.preys())
+    assert all(p.brain_id == "hive" for p in w.pack())
+    w.preys()[0].alive = False
+    assert w.prey() is w.preys_living()[0]
+    assert not w.done()
+    for prey in w.preys():
+        prey.alive = False
+    assert w.done()
+
+
 def test_swarm_gain_mixes_into_yaw():
     w = World(np.random.default_rng(6), n_planes=3, mode="hunt")
     w.swarm_gain = 1.0

@@ -5,8 +5,8 @@
 Educational simulation of **shared memory in a drone swarm**, using the same
 2-D Dubins gun fight as the dogfight lab. Hunters have a limited sense
 radius. What they see they can write onto a decaying tactical map; the rest
-of the pack reads that map. Hive mode trains one pack net on every hunter's
-trajectory.
+of the pack reads that map. There are only two brains: every prey body
+trains the prey net, every hunter trains the hive.
 
 ## Run with Docker Compose
 
@@ -37,17 +37,16 @@ uvicorn app.main:app --host 0.0.0.0 --port 8083
   blind to the prey.
 - The shared map is that radio: prey scent, danger, kill cells, and traffic.
   Scent decays, so stale reports fade.
-- **Isolated** — private nets, map off. The control experiment.
-- **Blackboard** — private nets, shared map. Coordination can start before
-  weights agree.
-- **Hive** — one pack net plus the map. A kill by drone 4 updates the brain
-  drone 2 is flying.
+- **Isolated** — two brains, map off. The control experiment.
+- **Blackboard** — two brains plus the shared map.
+- **Hive** — two brains plus the map. A kill by one hunter updates the brain
+  the rest of the pack is flying.
 - Swarm overlay assigns point / flank / cutter roles and mixes Reynolds
   separation into yaw. Coupling sliders turn that overlay up or down.
 
 The field physics match dogfight: constant speed, yaw capped by
-speed ÷ turn radius, gun welded to the nose. Default fight is one against
-the pack.
+speed ÷ turn radius, gun welded to the nose. Default fight is prey against the pack. Add more prey or more hive drones
+one at a time; they still share those two brains.
 
 Weights live on **`/data`**. On Railway, attach a volume at `/data` and set
 `PORT=8083` as a service variable. The proxy reaches this lab at `/swarm/`.

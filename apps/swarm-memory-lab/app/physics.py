@@ -1,7 +1,8 @@
 """2-D gun fight from the dogfight lab, used as the swarm hunting ground.
 
 Each drone is a Dubins vehicle: constant speed, yaw capped by speed / turn
-radius, gun welded to the nose. Default fight is one prey against a pack.
+radius, gun welded to the nose. Default fight is prey against a hive pack.
+Every prey body shares one brain; every hunter shares the hive brain.
 """
 
 from __future__ import annotations
@@ -24,12 +25,19 @@ HIT_R = 0.028
 COOLDOWN = 0.65
 GUN_RANGE = BULLET_SPEED * BULLET_LIFE
 SENSE_RANGE = 0.40
-MIN_PLANES = 3
+MIN_PREY = 1
+MIN_HIVE = 1
 MAX_PLANES = 8
-DEFAULT_PLANES = 5
+DEFAULT_PREY = 1
+DEFAULT_HIVE = 4
+MIN_PLANES = MIN_PREY + MIN_HIVE
+DEFAULT_PLANES = DEFAULT_PREY + DEFAULT_HIVE
 MODE_FFA = "ffa"
 MODE_HUNT = "hunt"
 MODES = (MODE_FFA, MODE_HUNT)
+ROLE_PREY = "prey"
+ROLE_PACK = "pack"
+ROLE_FFA = "ffa"
 
 OBS_NAMES = (
     "fwd",
@@ -78,6 +86,19 @@ def clamp_plane_count(n: int) -> int:
     return int(min(MAX_PLANES, max(MIN_PLANES, int(n))))
 
 
+def clamp_team_counts(n_prey: int, n_hive: int) -> tuple[int, int]:
+    prey = max(MIN_PREY, int(n_prey))
+    hive = max(MIN_HIVE, int(n_hive))
+    while prey + hive > MAX_PLANES:
+        if hive > MIN_HIVE:
+            hive -= 1
+        elif prey > MIN_PREY:
+            prey -= 1
+        else:
+            break
+    return prey, hive
+
+
 def clamp_mode(mode: str | None) -> str:
     text = str(mode or "").strip().lower().replace(" ", "-")
     if text in ("ffa", "free-for-all", "last-plane"):
@@ -89,9 +110,17 @@ def plane_id(i: int) -> str:
     return f"p{int(i) + 1}"
 
 
-def default_lineup(n: int) -> list[dict[str, str]]:
+def make_lineup(n_prey: int = DEFAULT_PREY, n_hive: int = DEFAULT_HIVE) -> list[dict[str, str]]:
+    n_prey, n_hive = clamp_team_counts(n_prey, n_hive)
+    slots = [{"brain_id": "prey", "role": ROLE_PREY} for _ in range(n_prey)]
+    slots.extend({"brain_id": "hive", "role": ROLE_PACK} for _ in range(n_hive))
+    return slots
+
+
+def default_lineup(n: int, n_prey: int = DEFAULT_PREY) -> list[dict[str, str]]:
     n = clamp_plane_count(n)
-    return [{"brain_id": plane_id(i)} for i in range(n)]
+    prey = int(np.clip(int(n_prey), MIN_PREY, n - MIN_HIVE))
+    return make_lineup(prey, n - prey)
 
 
 def max_yaw_rate() -> float:
@@ -157,6 +186,7 @@ class World:
     rng: np.random.Generator
     max_steps: int = MAX_STEPS
     n_planes: int = DEFAULT_PLANES
+    n_prey: int = DEFAULT_PREY
     mode: str = MODE_HUNT
     lineup: list[dict[str, str]] | None = None
     planes: list[Plane] = field(init=False)
@@ -174,9 +204,12 @@ class World:
             self.lineup = [dict(slot) for slot in self.lineup]
             self.n_planes = clamp_plane_count(len(self.lineup))
             self.lineup = self.lineup[: self.n_planes]
+            counted = sum(1 for slot in self.lineup if str(slot.get("role") or slot.get("brain_id")) == ROLE_PREY)
+            self.n_prey = counted if counted else min(DEFAULT_PREY, max(MIN_PREY, self.n_planes - MIN_HIVE))
         else:
-            self.n_planes = clamp_plane_count(self.n_planes)
-            self.lineup = default_lineup(self.n_planes)
+            self.n_prey, n_hive = clamp_team_counts(self.n_prey, max(MIN_HIVE, self.n_planes - max(MIN_PREY, int(self.n_prey))))
+            self.n_planes = self.n_prey + n_hive
+            self.lineup = make_lineup(self.n_prey, n_hive)
         self.reset()
 
     @property
@@ -191,10 +224,20 @@ class World:
         return [p for p in self.planes if p.alive]
 
     def prey(self) -> Plane | None:
-        return self.planes[0] if self.planes else None
+        living = self.preys_living()
+        if living:
+            return living[0]
+        preys = self.preys()
+        return preys[0] if preys else None
+
+    def preys(self) -> list[Plane]:
+        return [p for p in self.planes if p.role == ROLE_PREY]
+
+    def preys_living(self) -> list[Plane]:
+        return [p for p in self.preys() if p.alive]
 
     def pack(self) -> list[Plane]:
-        return list(self.planes[1:])
+        return [p for p in self.planes if p.role == ROLE_PACK]
 
     def pack_living(self) -> list[Plane]:
         return [p for p in self.pack() if p.alive]
@@ -207,10 +250,18 @@ class World:
         for i, slot in enumerate(slots):
             name = plane_id(i)
             brain_id = str(slot.get("brain_id") or name)
+            slot_role = str(slot.get("role") or "")
             if self.mode == MODE_HUNT:
-                role = "prey" if i == 0 else "pack"
+                if slot_role in (ROLE_PREY, ROLE_PACK):
+                    role = slot_role
+                elif brain_id == "prey":
+                    role = ROLE_PREY
+                elif i < self.n_prey:
+                    role = ROLE_PREY
+                else:
+                    role = ROLE_PACK
             else:
-                role = "ffa"
+                role = ROLE_FFA
             angle = (2.0 * np.pi * i) / n - np.pi / 2
             radius = 0.32 if n > 2 else 0.28
             x = float(np.clip(0.5 + radius * np.cos(angle) + jitter(), 0.08, 0.92))
@@ -269,6 +320,8 @@ class World:
             "t": self.t,
             "mode": self.mode,
             "n_planes": len(self.planes),
+            "n_prey": len(self.preys()),
+            "n_hive": len(self.pack()) if self.mode == MODE_HUNT else max(0, len(self.planes) - len(self.preys())),
             "alive": len(live),
             "prey": prey.name if prey and self.mode == MODE_HUNT else None,
             "red": self.red.pose(),
@@ -370,8 +423,7 @@ class World:
                     crashed.add(b.name)
         if not crashed:
             return
-        prey = self.prey()
-        prey_hit = bool(prey and prey.name in crashed)
+        prey_hit = any(p.role == ROLE_PREY and p.name in crashed for p in self.planes)
         for p in self.planes:
             if p.name in crashed and p.alive:
                 p.alive = False
@@ -383,8 +435,9 @@ class World:
         if prey_hit:
             for q in self.pack_living():
                 rewards[q.name] += 0.35
-        elif pack_in and prey and prey.alive:
-            rewards[prey.name] += 1.0
+        elif pack_in and self.preys_living():
+            for prey in self.preys_living():
+                rewards[prey.name] += 1.0
             for q in self.pack_living():
                 rewards[q.name] -= 0.45
 
@@ -470,9 +523,10 @@ class World:
 
     def _nearest_ally(self, me: Plane) -> Plane | None:
         if self.mode == MODE_HUNT:
-            if me.role == "prey":
-                return None
-            others = [p for p in self.pack_living() if p.name != me.name]
+            if me.role == ROLE_PREY:
+                others = [p for p in self.preys_living() if p.name != me.name]
+            else:
+                others = [p for p in self.pack_living() if p.name != me.name]
         else:
             others = [p for p in self.living() if p.name != me.name]
         if not others:
@@ -481,9 +535,16 @@ class World:
 
     def _focus(self, me: Plane) -> Plane | None:
         if self.mode == MODE_HUNT:
-            prey = self.prey()
-            if prey and me.name != prey.name and prey.alive:
-                return prey
+            if me.role == ROLE_PACK:
+                living_prey = self.preys_living()
+                if living_prey:
+                    return min(living_prey, key=lambda p: float(np.hypot(p.x - me.x, p.y - me.y)))
+                return None
+            if me.role == ROLE_PREY:
+                hunters = self.pack_living()
+                if hunters:
+                    return min(hunters, key=lambda p: float(np.hypot(p.x - me.x, p.y - me.y)))
+                return None
         return self._nearest_other(me)
 
     def _pack_links(self) -> list[dict]:
@@ -498,66 +559,76 @@ class World:
 
     def _already_over(self) -> bool:
         if self.mode == MODE_HUNT:
-            prey = self.prey()
-            return prey is None or not prey.alive or not self.pack_living()
+            return not self.preys_living() or not self.pack_living()
         return self._survivors() <= 1
 
     def _survivors(self) -> int:
         return sum(1 for p in self.planes if p.alive)
 
     def _hunt_shot(self, owner: str, hit: Plane, rewards: dict[str, float]) -> None:
-        prey = self.prey()
-        owner_is_prey = bool(prey and owner == prey.name)
-        hit_is_prey = bool(prey and hit.name == prey.name)
-        if owner_is_prey:
+        shooter = next((p for p in self.planes if p.name == owner), None)
+        owner_is_prey = bool(shooter and shooter.role == ROLE_PREY)
+        hit_is_prey = hit.role == ROLE_PREY
+        if owner_is_prey and not hit_is_prey:
             rewards[owner] += 1.5
             rewards[hit.name] -= 1.0
             for q in self.pack_living():
                 rewards[q.name] -= 0.55
-        elif hit_is_prey:
+            for q in self.preys_living():
+                if q.name != owner:
+                    rewards[q.name] += 0.35
+        elif hit_is_prey and not owner_is_prey:
             rewards[owner] += 2.2
             rewards[hit.name] -= 1.6
             for q in self.pack_living():
                 if q.name != owner:
                     rewards[q.name] += 0.5
+            for q in self.preys_living():
+                rewards[q.name] -= 0.35
         else:
             rewards[owner] -= 1.2
             rewards[hit.name] -= 1.0
-            if prey and prey.alive:
-                rewards[prey.name] += 1.1
+            if owner_is_prey:
+                for q in self.pack_living():
+                    rewards[q.name] += 0.4
+            else:
+                for q in self.preys_living():
+                    rewards[q.name] += 1.1
 
     def _hunt_loss(self, plane: Plane, rewards: dict[str, float], *, wall: bool) -> None:
-        prey = self.prey()
-        if prey and plane.name == prey.name:
+        if plane.role == ROLE_PREY:
             rewards[plane.name] -= 1.4
             for q in self.pack_living():
                 rewards[q.name] += 0.35
             return
         rewards[plane.name] -= 1.2 if wall else 1.0
-        if prey and prey.alive:
-            rewards[prey.name] += 1.0
+        for q in self.preys_living():
+            rewards[q.name] += 1.0
         for q in self.pack_living():
             rewards[q.name] -= 0.45
 
     def _resolve_hunt(self, rewards: dict[str, float]) -> None:
         if any(event in self.events for event in ("prey_down", "pack_wipe", "escape")):
             return
-        prey = self.prey()
+        living_prey = self.preys_living()
         pack_lost = sum(1 for p in self.pack() if not p.alive)
-        if prey and not prey.alive:
+        if not living_prey:
             self.events.append("prey_down")
             if pack_lost == 0:
                 self.events.append("clean_hunt")
             bonus = max(-0.8, 1.6 - 0.7 * pack_lost)
             for q in self.pack_living():
                 rewards[q.name] += bonus
-            rewards[prey.name] -= 0.3
-        elif prey and prey.alive and not self.pack_living():
+            for prey in self.preys():
+                rewards[prey.name] -= 0.3
+        elif not self.pack_living():
             self.events.append("pack_wipe")
-            rewards[prey.name] += 2.4 + 0.35 * pack_lost
-        elif self.steps >= self.max_steps and prey and prey.alive:
+            for prey in living_prey:
+                rewards[prey.name] += 2.4 + 0.35 * pack_lost
+        elif self.steps >= self.max_steps and living_prey:
             self.events.append("escape")
-            rewards[prey.name] += 2.0 + 0.35 * pack_lost
+            for prey in living_prey:
+                rewards[prey.name] += 2.0 + 0.35 * pack_lost
             for q in self.pack_living():
                 rewards[q.name] -= 1.2
 

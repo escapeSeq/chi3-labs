@@ -46,35 +46,45 @@ def test_hive_pools_pack_experience():
     academy.set_share(SHARE_HIVE, persist=False)
     academy.set_mode("hunt", persist=False)
     hive_before = academy.hive.updates
-    drone_before = [d.updates for d in academy.drones]
     academy.play(learn=True, persist=False, trace=False)
     assert academy.hive.updates == hive_before + 1
     assert academy.prey.updates == 1
-    assert [d.updates for d in academy.drones] == drone_before
 
 
-def test_isolated_does_not_update_hive_or_map():
+def test_isolated_does_not_write_map():
     academy = Academy(np.random.default_rng(4), data_dir=None)
     academy.set_max_steps(80, persist=False)
     academy.set_n_planes(4, persist=False)
     academy.set_share(SHARE_ISOLATED, persist=False)
     academy.play(learn=True, persist=False, trace=False)
-    assert academy.hive.updates == 0
+    assert academy.hive.updates == 1
     assert academy.prey.updates == 1
-    assert any(d.updates == 1 for d in academy.drones)
     assert academy.memory.energy()["prey"] == 0
     assert academy.uses_memory() is False
 
 
-def test_blackboard_writes_memory_but_keeps_private_nets():
+def test_blackboard_writes_memory_on_two_brains():
     academy = Academy(np.random.default_rng(5), data_dir=None)
     academy.set_max_steps(80, persist=False)
     academy.set_n_planes(4, persist=False)
     academy.set_share(SHARE_BOARD, persist=False)
     academy.play(learn=True, persist=False, trace=True)
     assert academy.uses_memory() is True
-    assert academy.hive.updates == 0
+    assert academy.hive.updates == 1
     assert academy.memory.writes > 0
     ids = [slot["brain_id"] for slot in academy.lineup()]
     assert ids[0] == "prey"
-    assert "hive" not in ids
+    assert set(ids[1:]) == {"hive"}
+
+
+def test_multiple_prey_share_one_brain():
+    academy = Academy(np.random.default_rng(6), data_dir=None)
+    academy.set_max_steps(80, persist=False)
+    academy.set_n_prey(2, persist=False)
+    academy.set_n_hive(3, persist=False)
+    academy.set_share(SHARE_HIVE, persist=False)
+    lineup = academy.lineup()
+    assert [slot["brain_id"] for slot in lineup] == ["prey", "prey", "hive", "hive", "hive"]
+    academy.play(learn=True, persist=False, trace=False)
+    assert academy.prey.updates == 1
+    assert academy.hive.updates == 1

@@ -17,32 +17,44 @@ if __package__:
     from .agents import ACTION_NAMES, Policy
     from .memory import SharedMemory
     from .physics import (
+        DEFAULT_HIVE,
         DEFAULT_PLANES,
+        DEFAULT_PREY,
         MAX_PLANES,
         MAX_STEPS,
+        MIN_HIVE,
         MIN_PLANES,
+        MIN_PREY,
         MODE_HUNT,
         SENSE_RANGE,
         World,
         clamp_max_steps,
         clamp_mode,
         clamp_plane_count,
+        clamp_team_counts,
+        make_lineup,
     )
     from .swarm import extra_turns
 else:
     from agents import ACTION_NAMES, Policy
     from memory import SharedMemory
     from physics import (
+        DEFAULT_HIVE,
         DEFAULT_PLANES,
+        DEFAULT_PREY,
         MAX_PLANES,
         MAX_STEPS,
+        MIN_HIVE,
         MIN_PLANES,
+        MIN_PREY,
         MODE_HUNT,
         SENSE_RANGE,
         World,
         clamp_max_steps,
         clamp_mode,
         clamp_plane_count,
+        clamp_team_counts,
+        make_lineup,
     )
     from swarm import extra_turns
 
@@ -160,7 +172,7 @@ class Scoreboard:
             if "clean_hunt" in events:
                 self.clean_hunts += 1
                 self.last_outcome = "clean_hunt"
-            elif any(event.endswith("_wall") and event.startswith("p1") for event in events):
+            elif any(event.endswith("_wall") and name_to_brain.get(event[: -len("_wall")]) == "prey" for event in events):
                 self.last_outcome = "prey_crash"
             elif "midair" in events:
                 self.last_outcome = "midair"
@@ -178,7 +190,8 @@ class Academy:
     curves: dict[str, list] = field(default_factory=dict)
     empty: bool = True
     max_steps: int = MAX_STEPS
-    n_planes: int = DEFAULT_PLANES
+    n_prey: int = DEFAULT_PREY
+    n_hive: int = DEFAULT_HIVE
     swarm_gain: float = 0.55
     memory_gain: float = 0.35
     memory_on: bool = True
@@ -191,9 +204,9 @@ class Academy:
         self.share = clamp_share(self.share)
         self.scores = {SHARE_ISOLATED: Scoreboard(), SHARE_BOARD: Scoreboard(), SHARE_HIVE: Scoreboard()}
         self.curves = {SHARE_ISOLATED: [], SHARE_BOARD: [], SHARE_HIVE: []}
+        self.n_prey, self.n_hive = clamp_team_counts(self.n_prey, self.n_hive)
         self.prey = Policy(self.rng, "prey")
         self.hive = Policy(self.rng, "hive")
-        self.drones = [Policy(self.rng, f"d{i + 1}") for i in range(MAX_PLANES)]
         self.memory = SharedMemory()
         self._play_lock = threading.RLock()
         self._persist_lock = threading.RLock()
@@ -213,29 +226,20 @@ class Academy:
     def curve(self) -> list:
         return self.curves.setdefault(self.share, [])
 
-    def lineup(self) -> list[dict[str, str]]:
-        ids = [self._seat_brain(i) for i in range(self.n_planes)]
-        return [{"brain_id": bid} for bid in ids]
+    @property
+    def n_planes(self) -> int:
+        return int(self.n_prey + self.n_hive)
 
-    def _seat_brain(self, seat: int) -> str:
-        if seat == 0 and self.mode == MODE_HUNT:
-            return "prey"
-        if self.share == SHARE_HIVE:
-            return "hive"
-        if self.mode == MODE_HUNT:
-            return f"d{seat}"
-        return f"d{seat + 1}"
+    def lineup(self) -> list[dict[str, str]]:
+        slots = make_lineup(self.n_prey, self.n_hive)
+        if self.mode != MODE_HUNT:
+            for slot in slots:
+                slot["role"] = "ffa"
+        return slots
 
     def _policy_for(self, brain_id: str) -> Policy:
         if brain_id == "prey":
             return self.prey
-        if brain_id == "hive":
-            return self.hive
-        if brain_id.startswith("d"):
-            idx = max(0, int(brain_id[1:]) - 1)
-            while len(self.drones) <= idx:
-                self.drones.append(Policy(self.rng, f"d{len(self.drones) + 1}"))
-            return self.drones[idx]
         return self.hive
 
     def uses_memory(self) -> bool:
@@ -245,8 +249,6 @@ class Academy:
         self.stop_burst(join=True)
         self.prey.reset()
         self.hive.reset()
-        for drone in self.drones:
-            drone.reset()
         self.memory.reset()
         self._clear_stats()
         self.empty = True
@@ -261,6 +263,21 @@ class Academy:
 
     def reset_memory(self) -> None:
         self.memory.reset()
+
+    def reset_brain(self, which: str, persist: bool = True) -> str:
+        name = str(which or "").strip().lower()
+        if name in ("prey", "preys"):
+            self.prey.reset()
+            name = "prey"
+        elif name in ("hive", "pack", "hunter", "hunters"):
+            self.hive.reset()
+            name = "hive"
+        else:
+            raise ValueError("brain must be prey or hive")
+        self.empty = self.prey.updates == 0 and self.hive.updates == 0
+        if persist:
+            self.persist()
+        return name
 
     def _clear_stats(self) -> None:
         self.scores = {SHARE_ISOLATED: Scoreboard(), SHARE_BOARD: Scoreboard(), SHARE_HIVE: Scoreboard()}
@@ -287,13 +304,27 @@ class Academy:
         return self.max_steps
 
     def set_n_planes(self, n: int, persist: bool = True) -> int:
-        self.n_planes = clamp_plane_count(n)
-        need = max(0, self.n_planes - 1)
-        while len(self.drones) < need:
-            self.drones.append(Policy(self.rng, f"d{len(self.drones) + 1}"))
+        n = clamp_plane_count(n)
+        prey = int(np.clip(self.n_prey, MIN_PREY, n - MIN_HIVE))
+        self.n_prey = prey
+        self.n_hive = n - prey
         if persist:
             self.persist()
         return self.n_planes
+
+    def set_n_prey(self, n: int, persist: bool = True) -> int:
+        cap = MAX_PLANES - self.n_hive
+        self.n_prey = int(min(max(MIN_PREY, int(n)), max(MIN_PREY, cap)))
+        if persist:
+            self.persist()
+        return self.n_prey
+
+    def set_n_hive(self, n: int, persist: bool = True) -> int:
+        cap = MAX_PLANES - self.n_prey
+        self.n_hive = int(min(max(MIN_HIVE, int(n)), max(MIN_HIVE, cap)))
+        if persist:
+            self.persist()
+        return self.n_hive
 
     def set_gains(self, swarm_gain: float | None = None, memory_gain: float | None = None, memory_on: bool | None = None, persist: bool = True) -> None:
         if swarm_gain is not None:
@@ -313,9 +344,6 @@ class Academy:
             "hive": self.data_dir / "hive.npz",
             "academy": self.data_dir / "academy.json",
         }
-        for i, drone in enumerate(self.drones):
-            paths[drone.name] = self.data_dir / f"{drone.name}.npz"
-            _ = i
         return paths
 
     def restore(self) -> bool:
@@ -331,7 +359,14 @@ class Academy:
             self.mode = clamp_mode(payload.get("mode"))
             self.share = clamp_share(payload.get("share"))
             self.max_steps = clamp_max_steps(payload.get("max_steps", self.max_steps))
-            self.n_planes = clamp_plane_count(payload.get("n_planes", self.n_planes))
+            stored_planes = clamp_plane_count(payload.get("n_planes", DEFAULT_PLANES))
+            if "n_prey" in payload or "n_hive" in payload:
+                self.n_prey, self.n_hive = clamp_team_counts(
+                    payload.get("n_prey", DEFAULT_PREY),
+                    payload.get("n_hive", DEFAULT_HIVE),
+                )
+            else:
+                self.n_prey, self.n_hive = clamp_team_counts(DEFAULT_PREY, stored_planes - DEFAULT_PREY)
             self.swarm_gain = float(payload.get("swarm_gain", self.swarm_gain))
             self.memory_gain = float(payload.get("memory_gain", self.memory_gain))
             self.memory_on = bool(payload.get("memory_on", True))
@@ -347,10 +382,6 @@ class Academy:
                 self.prey.load(paths["prey"])
             if paths["hive"].is_file():
                 self.hive.load(paths["hive"])
-            for drone in self.drones:
-                path = paths.get(drone.name)
-                if path is not None and path.is_file():
-                    drone.load(path)
             return True
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
             self.reset_models(persist=False)
@@ -364,8 +395,6 @@ class Academy:
             self.data_dir.mkdir(parents=True, exist_ok=True)
             self.prey.save(paths["prey"])
             self.hive.save(paths["hive"])
-            for drone in self.drones:
-                drone.save(paths[drone.name])
             tmp = paths["academy"].with_name(f".academy.{os.getpid()}.{time.time_ns()}.json.tmp")
             tmp.write_text(
                 json.dumps(
@@ -375,6 +404,8 @@ class Academy:
                         "empty": self.empty,
                         "max_steps": self.max_steps,
                         "n_planes": self.n_planes,
+                        "n_prey": self.n_prey,
+                        "n_hive": self.n_hive,
                         "swarm_gain": self.swarm_gain,
                         "memory_gain": self.memory_gain,
                         "memory_on": self.memory_on,
@@ -388,7 +419,7 @@ class Academy:
     def roster_report(self) -> list[dict]:
         used = [item["brain_id"] for item in self.lineup()]
         rows = []
-        brains = [("prey", self.prey), ("hive", self.hive)] + [(d.name, d) for d in self.drones[: max(1, self.n_planes)]]
+        brains = [("prey", self.prey), ("hive", self.hive)]
         seen = set()
         for brain_id, policy in brains:
             if brain_id in seen:
@@ -436,7 +467,6 @@ class Academy:
             "updates": {
                 "prey": self.prey.updates,
                 "hive": self.hive.updates,
-                **{d.name: d.updates for d in self.drones[: max(1, self.n_planes - 1)]},
             },
         }
 
@@ -531,7 +561,7 @@ class Academy:
             "score": self.score.as_dict(),
         }
         if learn:
-            self.empty = self.prey.updates == 0 and self.hive.updates == 0 and all(d.updates == 0 for d in self.drones)
+            self.empty = self.prey.updates == 0 and self.hive.updates == 0
             if record and epoch == self.stats_gen:
                 self.curve.append(row)
                 extra = len(self.curve) - CURVE_KEEP
