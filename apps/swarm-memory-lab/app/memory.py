@@ -17,7 +17,7 @@ if __package__:
 else:
     from physics import ARENA, DT, Plane, wrap_angle
 
-GRID = 16
+GRID = 32
 CHANNELS = ("prey", "danger", "kill", "traffic")
 TAU = 2.8
 

@@ -534,7 +534,7 @@ function drawField(frame) {
 function paintHeat(ctx, memory) {
   const layers = memory?.layers;
   if (!layers) return;
-  const grid = memory.grid || layers.prey?.length || 16;
+  const grid = memory.grid || layers.prey?.length || 32;
   const cell = (field.width - 56) / grid;
   const origin = 28;
   for (let j = 0; j < grid; j += 1) {
@@ -618,7 +618,7 @@ function paintMemory(memory) {
     ctx.fillText("Map off in isolated mode.", 24, 36);
     return;
   }
-  const grid = memory.grid || 16;
+  const grid = memory.grid || 32;
   const cw = canvas.width / grid;
   const ch = canvas.height / grid;
   for (let j = 0; j < grid; j += 1) {
