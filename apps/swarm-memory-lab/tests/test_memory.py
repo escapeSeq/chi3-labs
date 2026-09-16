@@ -88,3 +88,33 @@ def test_multiple_prey_share_one_brain():
     academy.play(learn=True, persist=False, trace=False)
     assert academy.prey.updates == 1
     assert academy.hive.updates == 1
+
+
+def test_changing_prey_count_aborts_the_current_fight():
+    import threading
+    import time
+
+    academy = Academy(np.random.default_rng(7), data_dir=None)
+    academy.set_max_steps(4000, persist=False)
+    academy.set_n_prey(1, persist=False)
+    academy.set_n_hive(3, persist=False)
+    result = {}
+
+    def run():
+        result["play"] = academy.play(learn=True, persist=False, trace=False)
+
+    thread = threading.Thread(target=run)
+    thread.start()
+    deadline = time.time() + 2
+    while time.time() < deadline:
+        got = academy._play_lock.acquire(blocking=False)
+        if got:
+            academy._play_lock.release()
+            time.sleep(0.01)
+            continue
+        break
+    academy.set_n_prey(2, persist=False)
+    thread.join(timeout=8)
+    assert thread.is_alive() is False
+    assert result["play"]["aborted"] is True
+    assert academy.n_prey == 2

@@ -210,6 +210,7 @@ class Academy:
         self.memory = SharedMemory()
         self._play_lock = threading.RLock()
         self._persist_lock = threading.RLock()
+        self._cancel_play = threading.Event()
         self._burst_stop = threading.Event()
         self._burst_thread: threading.Thread | None = None
         self.burst_running = False
@@ -304,6 +305,7 @@ class Academy:
         return self.max_steps
 
     def set_n_planes(self, n: int, persist: bool = True) -> int:
+        self.interrupt_play()
         n = clamp_plane_count(n)
         prey = int(np.clip(self.n_prey, MIN_PREY, n - MIN_HIVE))
         self.n_prey = prey
@@ -313,6 +315,7 @@ class Academy:
         return self.n_planes
 
     def set_n_prey(self, n: int, persist: bool = True) -> int:
+        self.interrupt_play()
         cap = MAX_PLANES - self.n_hive
         self.n_prey = int(min(max(MIN_PREY, int(n)), max(MIN_PREY, cap)))
         if persist:
@@ -320,6 +323,7 @@ class Academy:
         return self.n_prey
 
     def set_n_hive(self, n: int, persist: bool = True) -> int:
+        self.interrupt_play()
         cap = MAX_PLANES - self.n_prey
         self.n_hive = int(min(max(MIN_HIVE, int(n)), max(MIN_HIVE, cap)))
         if persist:
@@ -471,8 +475,12 @@ class Academy:
             },
         }
 
+    def interrupt_play(self) -> None:
+        self._cancel_play.set()
+
     def play(self, learn: bool = True, lr: float = 0.014, record: bool = True, persist: bool = True, trace: bool = True) -> dict:
         with self._play_lock:
+            self._cancel_play.clear()
             return self._play(learn=learn, lr=lr, record=record, persist=persist, trace=trace)
 
     def _play(self, learn: bool = True, lr: float = 0.014, record: bool = True, persist: bool = True, trace: bool = True) -> dict:
@@ -484,9 +492,12 @@ class Academy:
         frames = []
         seen_events = 0
         pack_names = {p.name for p in world.pack()}
-        if not self.uses_memory():
-            extras_off = {"mem_fwd": 0.0, "mem_right": 0.0, "mem_heat": 0.0, "mem_kill": 0.0}
+        extras_off = {"mem_fwd": 0.0, "mem_right": 0.0, "mem_heat": 0.0, "mem_kill": 0.0}
+        aborted = False
         while not world.done():
+            if self._cancel_play.is_set():
+                aborted = True
+                break
             world.extra_turns = extra_turns(world)
             if self.uses_memory():
                 for name, turn in list(world.extra_turns.items()):
@@ -512,10 +523,21 @@ class Academy:
                 rolls[name].append((last_obs[name], action, float(reward.get(name, 0.0))))
             if trace:
                 snap = world.snapshot()
-                snap["memory"] = self.memory.snapshot() if self.uses_memory() else None
+                if self.uses_memory() and (world.steps % 8 == 1 or new_events or world.done()):
+                    snap["memory"] = self.memory.snapshot()
                 for pose in snap["planes"]:
                     pose["brain_label"] = _brain_label(pose.get("brain_id"))
                 frames.append(snap)
+
+        if aborted:
+            snap = world.snapshot()
+            snap["memory"] = self.memory.snapshot() if self.uses_memory() else None
+            return {
+                "trace": [snap],
+                "summary": {"events": ["aborted"], "steps": world.steps, "outcome": "aborted"},
+                "memory": snap.get("memory"),
+                "aborted": True,
+            }
 
         name_to_brain = {p.name: p.brain_id for p in world.planes}
         if record and epoch == self.stats_gen:

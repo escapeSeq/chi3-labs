@@ -132,9 +132,6 @@ class Policy:
                 "w2_growth": w2_rms / W2_INIT_RMS,
             },
             "baseline": float(self.baseline),
-            "obs_names": list(OBS_NAMES),
-            "w1": [[float(v) for v in row] for row in self.W1],
-            "w2": [[float(v) for v in row] for row in self.W2],
             "hidden_mean": [float(v) for v in hidden.mean(axis=0)],
             "probe": {
                 "mean_probs": [float(v) for v in mean_p],

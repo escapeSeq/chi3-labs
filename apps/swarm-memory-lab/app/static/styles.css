@@ -323,6 +323,13 @@ input[type="range"] {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 1.1rem;
   line-height: 1;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.stepper button.is-limit {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .stepper input[type="number"] {

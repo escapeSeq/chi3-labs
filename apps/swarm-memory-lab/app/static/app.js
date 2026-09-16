@@ -32,6 +32,7 @@ const state = {
   physics: { turn_radius: 0.06, arena: 1, n_planes: 5, dt: 0.05 },
   running: true,
   flightId: 0,
+  lastMemory: null,
   timeoutDirty: false,
   preyDirty: false,
   hiveDirty: false,
@@ -110,10 +111,12 @@ function syncCopy(prey, hive) {
       : "Free-for-all. Shared memory still paints traffic, danger, and kill cells."
   );
   const plusOff = p + h >= PLANES_MAX;
-  if ($("prey-plus")) $("prey-plus").disabled = plusOff;
-  if ($("hive-plus")) $("hive-plus").disabled = plusOff;
-  if ($("prey-minus")) $("prey-minus").disabled = p <= PREY_MIN;
-  if ($("hive-minus")) $("hive-minus").disabled = h <= HIVE_MIN;
+  const preyMinusOff = p <= PREY_MIN;
+  const hiveMinusOff = h <= HIVE_MIN;
+  if ($("prey-plus")) $("prey-plus").classList.toggle("is-limit", plusOff);
+  if ($("hive-plus")) $("hive-plus").classList.toggle("is-limit", plusOff);
+  if ($("prey-minus")) $("prey-minus").classList.toggle("is-limit", preyMinusOff);
+  if ($("hive-minus")) $("hive-minus").classList.toggle("is-limit", hiveMinusOff);
 }
 
 function setTeamCounts(prey, hive) {
@@ -174,11 +177,21 @@ function teamPending() {
   return teamQueue.prey != null || teamQueue.hive != null || teamQueue.inflight;
 }
 
+function previewLineup() {
+  const hunt = fightMode() === "hunt";
+  const slots = [];
+  for (let i = 0; i < preyCount(); i += 1) slots.push({ brain_id: "prey", role: hunt ? "prey" : "ffa" });
+  for (let i = 0; i < hiveCount(); i += 1) slots.push({ brain_id: "hive", role: hunt ? "pack" : "ffa" });
+  return slots;
+}
+
 function queuePrey(n) {
   const next = clamp(Math.round(Number(n)), PREY_MIN, PLANES_MAX - hiveCount());
   setTeamCounts(next, hiveCount());
   teamQueue.prey = next;
   state.preyDirty = true;
+  state.lineup = previewLineup();
+  renderHangar();
   scheduleTeamPush();
 }
 
@@ -187,6 +200,8 @@ function queueHive(n) {
   setTeamCounts(preyCount(), next);
   teamQueue.hive = next;
   state.hiveDirty = true;
+  state.lineup = previewLineup();
+  renderHangar();
   scheduleTeamPush();
 }
 
@@ -214,7 +229,8 @@ async function flushTeam() {
     state.preyDirty = teamQueue.prey != null;
     state.hiveDirty = teamQueue.hive != null;
     if (body) applyStatus(body);
-    $("status").textContent = `${preyCount()} prey · ${hiveCount()} hive. Next sortie uses this lineup.`;
+    $("status").textContent = `${preyCount()} prey · ${hiveCount()} hive.`;
+    restartFlights();
   } catch (err) {
     state.preyDirty = false;
     state.hiveDirty = false;
@@ -509,7 +525,8 @@ function drawField(frame) {
   const w = field.width;
   ctx.fillStyle = "#081014";
   ctx.fillRect(0, 0, w, field.height);
-  paintHeat(ctx, frame.memory);
+  if (frame.memory) state.lastMemory = frame.memory;
+  paintHeat(ctx, frame.memory || state.lastMemory);
   ctx.strokeStyle = "rgba(231,239,230,0.08)";
   ctx.lineWidth = 1;
   for (let i = 1; i < 8; i += 1) {
@@ -845,6 +862,10 @@ async function loopSortie() {
     const body = await res.json();
     if (id !== state.flightId || !state.running || state.bursting) return;
     if (!res.ok) throw new Error(body.detail || "Sortie failed");
+    if (body.aborted) {
+      if (state.running) loopSortie();
+      return;
+    }
     applyStatus(body);
     playTrace(body.trace, body.summary, () => {
       if (id !== state.flightId || !state.running) return;

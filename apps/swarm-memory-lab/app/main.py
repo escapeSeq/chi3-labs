@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
@@ -80,6 +81,14 @@ class GainsIn(BaseModel):
 
 
 ACADEMY = Academy(np.random.default_rng(11), data_dir=DATA_DIR)
+
+
+def _json_default(value):
+    if hasattr(value, "item"):
+        return value.item()
+    if hasattr(value, "tolist"):
+        return value.tolist()
+    return str(value)
 
 
 def _status() -> dict:
@@ -244,15 +253,21 @@ def burst_stop() -> dict:
 
 
 @app.post("/api/watch")
-async def watch() -> dict:
-    duel = await run_in_threadpool(lambda: ACADEMY.play(learn=False, record=False))
-    return {**duel, **_status()}
+async def watch() -> Response:
+    def run() -> str:
+        duel = ACADEMY.play(learn=False, record=False)
+        return json.dumps({**duel, **_status()}, default=_json_default)
+
+    return Response(content=await run_in_threadpool(run), media_type="application/json")
 
 
 @app.post("/api/sortie")
-async def sortie() -> dict:
-    result = await run_in_threadpool(lambda: ACADEMY.play(learn=True))
-    return {**result, **_status()}
+async def sortie() -> Response:
+    def run() -> str:
+        result = ACADEMY.play(learn=True)
+        return json.dumps({**result, **_status()}, default=_json_default)
+
+    return Response(content=await run_in_threadpool(run), media_type="application/json")
 
 
 @app.middleware("http")
