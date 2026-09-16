@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img" aria-label="Physics lab: constitutive curve, scope, and spectrum">
+  <rect width="640" height="400" fill="#081014"/>
+  <g fill="none" stroke="rgba(231,239,230,0.08)" stroke-width="1">
+    <path d="M24 24h280v200H24z"/>
+    <path d="M336 24h280v200H336z"/>
+    <path d="M24 240h592v136H24z"/>
+  </g>
+  <text x="36" y="44" fill="#8aa09a" font-family="ui-monospace, Menlo, monospace" font-size="11">P(E)</text>
+  <text x="348" y="44" fill="#8aa09a" font-family="ui-monospace, Menlo, monospace" font-size="11">E(t) · P(t)</text>
+  <text x="36" y="258" fill="#8aa09a" font-family="ui-monospace, Menlo, monospace" font-size="11">spectrum</text>
+  <path d="M48 196h232M48 196v-148" stroke="rgba(231,239,230,0.16)" stroke-width="1"/>
+  <path d="M48 196 L280 52" stroke="rgba(230,195,106,0.35)" stroke-width="1.2" stroke-dasharray="4 4"/>
+  <path d="M56 188 C120 186 150 150 188 96 C220 52 248 44 276 58" fill="none" stroke="#e6c36a" stroke-width="2.4"/>
+  <circle cx="188" cy="96" r="5" fill="#e85d4c"/>
+  <path d="M360 120h232M360 120v0" stroke="rgba(231,239,230,0.16)" stroke-width="1"/>
+  <path d="M368 120 C392 72 416 168 440 120 S488 72 512 120 S560 168 584 120" fill="none" stroke="#3db8c5" stroke-width="2"/>
+  <path d="M368 120 C390 88 412 164 438 108 S486 64 514 128 S558 176 584 112" fill="none" stroke="#e6c36a" stroke-width="2.2"/>
+  <g transform="translate(48 300)">
+    <rect x="20" y="-28" width="10" height="40" fill="#3db8c5"/>
+    <rect x="86" y="4" width="10" height="8" fill="rgba(61,184,197,0.35)"/>
+    <rect x="152" y="-64" width="12" height="76" fill="#e6c36a"/>
+    <rect x="218" y="-18" width="10" height="30" fill="#e85d4c"/>
+    <rect x="284" y="-38" width="10" height="50" fill="#e6c36a"/>
+    <rect x="350" y="0" width="10" height="12" fill="rgba(232,93,76,0.45)"/>
+    <rect x="416" y="-12" width="10" height="24" fill="#3db8c5"/>
+    <rect x="482" y="-8" width="10" height="20" fill="rgba(230,195,106,0.55)"/>
+  </g>
+  <text x="68" y="364" fill="#8aa09a" font-family="ui-monospace, Menlo, monospace" font-size="10">É</text>
+  <text x="196" y="364" fill="#e6c36a" font-family="ui-monospace, Menlo, monospace" font-size="10">2É</text>
+  <text x="262" y="364" fill="#e85d4c" font-family="ui-monospace, Menlo, monospace" font-size="10">3É</text>
+  <text x="524" y="44" fill="#e6c36a" font-family="ui-monospace, Menlo, monospace" font-size="10">Ç³ on</text>
+</svg>
