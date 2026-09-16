@@ -286,7 +286,7 @@ class Academy:
     def set_mode(self, mode: str, persist: bool = True) -> str:
         self.mode = clamp_mode(mode)
         if persist:
-            self.persist()
+            self.persist(brains=False)
         return self.mode
 
     def set_share(self, share: str, persist: bool = True) -> str:
@@ -294,13 +294,13 @@ class Academy:
         self.scores.setdefault(self.share, Scoreboard())
         self.curves.setdefault(self.share, [])
         if persist:
-            self.persist()
+            self.persist(brains=False)
         return self.share
 
     def set_max_steps(self, steps: int, persist: bool = True) -> int:
         self.max_steps = clamp_max_steps(steps)
         if persist:
-            self.persist()
+            self.persist(brains=False)
         return self.max_steps
 
     def set_n_planes(self, n: int, persist: bool = True) -> int:
@@ -309,21 +309,21 @@ class Academy:
         self.n_prey = prey
         self.n_hive = n - prey
         if persist:
-            self.persist()
+            self.persist(brains=False)
         return self.n_planes
 
     def set_n_prey(self, n: int, persist: bool = True) -> int:
         cap = MAX_PLANES - self.n_hive
         self.n_prey = int(min(max(MIN_PREY, int(n)), max(MIN_PREY, cap)))
         if persist:
-            self.persist()
+            self.persist(brains=False)
         return self.n_prey
 
     def set_n_hive(self, n: int, persist: bool = True) -> int:
         cap = MAX_PLANES - self.n_prey
         self.n_hive = int(min(max(MIN_HIVE, int(n)), max(MIN_HIVE, cap)))
         if persist:
-            self.persist()
+            self.persist(brains=False)
         return self.n_hive
 
     def set_gains(self, swarm_gain: float | None = None, memory_gain: float | None = None, memory_on: bool | None = None, persist: bool = True) -> None:
@@ -334,7 +334,7 @@ class Academy:
         if memory_on is not None:
             self.memory_on = bool(memory_on)
         if persist:
-            self.persist()
+            self.persist(brains=False)
 
     def brain_paths(self) -> dict[str, Path] | None:
         if self.data_dir is None:
@@ -387,14 +387,15 @@ class Academy:
             self.reset_models(persist=False)
             return False
 
-    def persist(self) -> None:
+    def persist(self, brains: bool = True) -> None:
         paths = self.brain_paths()
         if paths is None or self.data_dir is None:
             return
         with self._persist_lock:
             self.data_dir.mkdir(parents=True, exist_ok=True)
-            self.prey.save(paths["prey"])
-            self.hive.save(paths["hive"])
+            if brains:
+                self.prey.save(paths["prey"])
+                self.hive.save(paths["hive"])
             tmp = paths["academy"].with_name(f".academy.{os.getpid()}.{time.time_ns()}.json.tmp")
             tmp.write_text(
                 json.dumps(

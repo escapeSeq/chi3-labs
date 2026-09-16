@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 if __package__:
     from . import physics
@@ -243,14 +244,14 @@ def burst_stop() -> dict:
 
 
 @app.post("/api/watch")
-def watch() -> dict:
-    duel = ACADEMY.play(learn=False, record=False)
+async def watch() -> dict:
+    duel = await run_in_threadpool(lambda: ACADEMY.play(learn=False, record=False))
     return {**duel, **_status()}
 
 
 @app.post("/api/sortie")
-def sortie() -> dict:
-    result = ACADEMY.play(learn=True)
+async def sortie() -> dict:
+    result = await run_in_threadpool(lambda: ACADEMY.play(learn=True))
     return {**result, **_status()}
 
 

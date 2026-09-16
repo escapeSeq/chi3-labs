@@ -31,7 +31,7 @@ const state = {
   curve: [],
   physics: { turn_radius: 0.06, arena: 1, n_planes: 5, dt: 0.05 },
   running: true,
-  busy: false,
+  flightId: 0,
   timeoutDirty: false,
   preyDirty: false,
   hiveDirty: false,
@@ -168,33 +168,60 @@ async function pushTimeout() {
   }
 }
 
-async function pushPrey(n) {
-  const next = clamp(Math.round(Number(n)), PREY_MIN, PLANES_MAX - hiveCount());
-  setTeamCounts(next, hiveCount());
-  try {
-    const body = await pushJson("api/prey", { n: next });
-    state.preyDirty = false;
-    applyStatus(body);
-    $("status").textContent = next === 1 ? "Next fight has 1 prey." : `Next fight has ${next} prey.`;
-    restartFlights();
-  } catch (err) {
-    state.preyDirty = false;
-    $("status").textContent = err.message;
-  }
+const teamQueue = { prey: null, hive: null, timer: null, inflight: false };
+
+function teamPending() {
+  return teamQueue.prey != null || teamQueue.hive != null || teamQueue.inflight;
 }
 
-async function pushHive(n) {
+function queuePrey(n) {
+  const next = clamp(Math.round(Number(n)), PREY_MIN, PLANES_MAX - hiveCount());
+  setTeamCounts(next, hiveCount());
+  teamQueue.prey = next;
+  state.preyDirty = true;
+  scheduleTeamPush();
+}
+
+function queueHive(n) {
   const next = clamp(Math.round(Number(n)), HIVE_MIN, PLANES_MAX - preyCount());
   setTeamCounts(preyCount(), next);
+  teamQueue.hive = next;
+  state.hiveDirty = true;
+  scheduleTeamPush();
+}
+
+function scheduleTeamPush() {
+  if (teamQueue.timer) clearTimeout(teamQueue.timer);
+  teamQueue.timer = setTimeout(flushTeam, 80);
+}
+
+async function flushTeam() {
+  teamQueue.timer = null;
+  if (teamQueue.inflight) {
+    scheduleTeamPush();
+    return;
+  }
+  const prey = teamQueue.prey;
+  const hive = teamQueue.hive;
+  if (prey == null && hive == null) return;
+  teamQueue.prey = null;
+  teamQueue.hive = null;
+  teamQueue.inflight = true;
   try {
-    const body = await pushJson("api/hive", { n: next });
-    state.hiveDirty = false;
-    applyStatus(body);
-    $("status").textContent = next === 1 ? "Next fight has 1 hive drone." : `Next fight has ${next} hive drones.`;
-    restartFlights();
+    let body = null;
+    if (prey != null) body = await pushJson("api/prey", { n: prey });
+    if (hive != null) body = await pushJson("api/hive", { n: hive });
+    state.preyDirty = teamQueue.prey != null;
+    state.hiveDirty = teamQueue.hive != null;
+    if (body) applyStatus(body);
+    $("status").textContent = `${preyCount()} prey · ${hiveCount()} hive. Next sortie uses this lineup.`;
   } catch (err) {
+    state.preyDirty = false;
     state.hiveDirty = false;
     $("status").textContent = err.message;
+  } finally {
+    teamQueue.inflight = false;
+    if (teamQueue.prey != null || teamQueue.hive != null) scheduleTeamPush();
   }
 }
 
@@ -259,32 +286,26 @@ $("timeout-num").addEventListener("change", () => {
   pushTimeout();
 });
 $("prey-num").addEventListener("change", () => {
-  state.preyDirty = true;
-  pushPrey(preyCount());
+  queuePrey(preyCount());
 });
 $("hive-num").addEventListener("change", () => {
-  state.hiveDirty = true;
-  pushHive(hiveCount());
+  queueHive(hiveCount());
 });
 $("prey-plus").addEventListener("click", () => {
   if (preyCount() + hiveCount() >= PLANES_MAX) return;
-  state.preyDirty = true;
-  pushPrey(preyCount() + 1);
+  queuePrey(preyCount() + 1);
 });
 $("prey-minus").addEventListener("click", () => {
   if (preyCount() <= PREY_MIN) return;
-  state.preyDirty = true;
-  pushPrey(preyCount() - 1);
+  queuePrey(preyCount() - 1);
 });
 $("hive-plus").addEventListener("click", () => {
   if (preyCount() + hiveCount() >= PLANES_MAX) return;
-  state.hiveDirty = true;
-  pushHive(hiveCount() + 1);
+  queueHive(hiveCount() + 1);
 });
 $("hive-minus").addEventListener("click", () => {
   if (hiveCount() <= HIVE_MIN) return;
-  state.hiveDirty = true;
-  pushHive(hiveCount() - 1);
+  queueHive(hiveCount() - 1);
 });
 $("mode").addEventListener("change", () => {
   state.modeDirty = true;
@@ -311,21 +332,24 @@ $("memory-gain").addEventListener("change", pushGains);
 
 function pauseFlights() {
   state.running = false;
+  state.flightId += 1;
   stopPlay();
   $("pause").textContent = "Resume flights";
 }
 
 function resumeFlights() {
   state.running = true;
+  state.flightId += 1;
+  stopPlay();
   $("pause").textContent = "Pause flights";
   loopSortie();
 }
 
 function restartFlights() {
-  if (state.running) {
-    pauseFlights();
-    resumeFlights();
-  } else {
+  if (state.running) resumeFlights();
+  else {
+    state.flightId += 1;
+    stopPlay();
     drawEmpty();
   }
 }
@@ -757,7 +781,7 @@ function applyStatus(body) {
   if (body.physics) {
     state.physics = body.physics;
     if (!state.timeoutDirty && body.physics.timeout != null) setTimeoutSeconds(body.physics.timeout);
-    if (!state.preyDirty && !state.hiveDirty && (body.physics.n_prey != null || body.physics.n_hive != null)) {
+    if (!state.preyDirty && !state.hiveDirty && !teamPending() && (body.physics.n_prey != null || body.physics.n_hive != null)) {
       setTeamCounts(body.physics.n_prey ?? preyCount(), body.physics.n_hive ?? hiveCount());
     } else {
       syncCopy();
@@ -814,19 +838,20 @@ function playTrace(frames, summary, onDone) {
 }
 
 async function loopSortie() {
-  if (!state.running || state.busy || state.bursting) return;
-  state.busy = true;
+  if (!state.running || state.bursting) return;
+  const id = state.flightId;
   try {
     const res = await fetch("api/sortie", { method: "POST" });
     const body = await res.json();
+    if (id !== state.flightId || !state.running || state.bursting) return;
     if (!res.ok) throw new Error(body.detail || "Sortie failed");
     applyStatus(body);
     playTrace(body.trace, body.summary, () => {
-      state.busy = false;
-      if (state.running) loopSortie();
+      if (id !== state.flightId || !state.running) return;
+      loopSortie();
     });
   } catch (err) {
-    state.busy = false;
+    if (id !== state.flightId) return;
     $("status").textContent = err.message;
     if (state.running) state.nextTimer = setTimeout(loopSortie, 1200);
   }

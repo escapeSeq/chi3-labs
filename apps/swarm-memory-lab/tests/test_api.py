@@ -31,8 +31,8 @@ def test_health_and_index():
     assert 'id="share"' in page.text
     assert 'id="prey-plus"' in page.text
     assert 'id="hive-plus"' in page.text
-    assert 'href="static/styles.css?v=swarm3"' in page.text
-    assert 'src="static/app.js?v=swarm3"' in page.text
+    assert 'href="static/styles.css?v=swarm4"' in page.text
+    assert 'src="static/app.js?v=swarm4"' in page.text
     js = client.get("/static/app.js")
     assert js.status_code == 200
     assert "api/share" in js.text
