@@ -1,5 +1,7 @@
 # Wave Lab
 
+<img src="../../proxy/www/stills/waves.svg" width="100%" alt="A pitched hull riding stacked Gerstner waves" />
+
 Educational seakeeping bench: stack Gerstner seas, steer a hull through them,
 and watch **strip-theory buoyancy** heave and pitch the boat. Side view or a
 WebGL mesh of the same run.

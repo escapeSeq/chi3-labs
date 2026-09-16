@@ -1,18 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img" aria-label="Swarm lab: shared prey-scent map and pack">
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400" preserveAspectRatio="xMidYMid slice">
   <rect width="640" height="400" fill="#081014"/>
-  <rect x="90" y="24" width="352" height="352" fill="none" stroke="rgba(231,239,230,0.14)"/>
-  <g opacity="0.9">
-    <circle cx="300" cy="168" r="70" fill="rgba(230,195,106,0.16)"/>
-    <circle cx="300" cy="168" r="42" fill="rgba(230,195,106,0.28)"/>
-    <circle cx="300" cy="168" r="18" fill="rgba(230,195,106,0.45)"/>
-    <circle cx="180" cy="260" r="28" fill="rgba(232,93,76,0.18)"/>
-    <circle cx="220" cy="300" r="22" fill="rgba(61,184,197,0.12)"/>
+  <rect x="90" y="24" width="352" height="352" fill="none" stroke="#26383c"/>
+  <g>
+    <circle cx="300" cy="168" r="70" fill="#e6c36a" opacity="0.16"/>
+    <circle cx="300" cy="168" r="42" fill="#e6c36a" opacity="0.28"/>
+    <circle cx="300" cy="168" r="18" fill="#e6c36a" opacity="0.45"/>
+    <circle cx="180" cy="260" r="28" fill="#e85d4c" opacity="0.18"/>
+    <circle cx="220" cy="300" r="22" fill="#3db8c5" opacity="0.12"/>
   </g>
-  <g stroke="rgba(231,239,230,0.06)" stroke-width="1">
+  <g stroke="#152226" stroke-width="1">
     <path d="M90 112h352M90 200h352M90 288h352"/>
     <path d="M178 24v352M266 24v352M354 24v352"/>
   </g>
-  <path d="M168 292 L214 236 L268 210 L300 176" fill="none" stroke="rgba(61,184,197,0.45)" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <path d="M168 292 L214 236 L268 210 L300 176" fill="none" stroke="#3db8c5" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.55"/>
   <g fill="#3db8c5">
     <path d="M160 300 l6 -14 6 14 -6 -4z" transform="rotate(-40 166 292)"/>
     <path d="M208 244 l6 -14 6 14 -6 -4z" transform="rotate(-18 214 236)"/>
@@ -23,7 +24,7 @@
     <path d="M-8 6 L0 -12 L8 6 L0 1 Z" fill="#e6c36a"/>
   </g>
   <g transform="translate(470 40)" font-family="ui-monospace, Menlo, monospace">
-    <text x="0" y="0" fill="#8aa09a" font-size="11">hive · 5 drones</text>
+    <text x="0" y="0" fill="#8aa09a" font-size="11">hive / 5 drones</text>
     <text x="0" y="32" fill="#e6c36a" font-size="13">prey scent</text>
     <text x="0" y="52" fill="#8aa09a" font-size="11">decaying blackboard</text>
     <text x="0" y="88" fill="#3db8c5" font-size="13">one net, many bodies</text>

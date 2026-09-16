@@ -1,5 +1,7 @@
 # χ Nonlinear Physics Lab
 
+<img src="../../proxy/www/stills/physics.svg" width="100%" alt="Constitutive curve, oscilloscope traces, and mixing lines on a spectrum" />
+
 Educational simulation of the **absolute fundamentals of nonlinear analog
 physics**: a weakly nonlinear medium
 

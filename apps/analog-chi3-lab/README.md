@@ -1,5 +1,7 @@
 # χ³ Analog Lab
 
+<img src="../../proxy/www/stills/analog.svg" width="100%" alt="Oscillators split into two communities on a Max-Cut graph" />
+
 Educational simulation of **analog nonlinear (χ³) computing**: a coherent Ising
 machine that relaxes a Max-Cut instance in analog time, shown next to a digital
 walker that flips one spin per tick, plus a Kerr-slab field processor that
