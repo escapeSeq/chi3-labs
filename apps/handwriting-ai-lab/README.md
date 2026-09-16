@@ -1,6 +1,6 @@
 # Handwriting AI Lab
 
-<img src="../../proxy/www/stills/handwriting.svg" width="100%" alt="A handwritten 4, hidden-unit templates, and a frozen digit guess" />
+<img src="../../proxy/www/stills/handwriting.png" width="100%" alt="A handwritten 4, hidden-unit templates, and a frozen digit guess" />
 
 Educational visualization of **training versus using** a neural net, with a
 mouse-drawn handwriting pad.

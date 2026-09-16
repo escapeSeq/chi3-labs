@@ -1,6 +1,6 @@
 # Swarm Memory Lab
 
-<img src="../../proxy/www/stills/swarm.svg" width="100%" alt="Pack drones steering by a decaying prey-scent map" />
+<img src="../../proxy/www/stills/swarm.png" width="100%" alt="Pack drones steering by a decaying prey-scent map" />
 
 Educational simulation of **shared memory in a drone swarm**, using the same
 2-D Dubins gun fight as the dogfight lab. Hunters have a limited sense

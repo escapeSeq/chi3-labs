@@ -13,31 +13,31 @@ A Caddy proxy sits in front of the labs so they share one origin.
 <table>
   <tr>
     <td width="50%">
-      <a href="apps/nonlinear-physics-lab"><img src="proxy/www/stills/physics.svg" width="100%" alt="Constitutive curve, oscilloscope traces, and mixing lines on a spectrum" /></a>
+      <a href="apps/nonlinear-physics-lab"><img src="proxy/www/stills/physics.png" width="100%" alt="Constitutive curve, oscilloscope traces, and mixing lines on a spectrum" /></a>
       <p><strong>Physics — when the medium starts to multiply.</strong> Linear is a copy. χ² squares the field; χ³ cubes it. New lines appear on the spectrum because the physics wrote them.</p>
     </td>
     <td width="50%">
-      <a href="apps/analog-chi3-lab"><img src="proxy/www/stills/analog.svg" width="100%" alt="Oscillators split into two communities on a Max-Cut graph" /></a>
+      <a href="apps/analog-chi3-lab"><img src="proxy/www/stills/analog.png" width="100%" alt="Oscillators split into two communities on a Max-Cut graph" /></a>
       <p><strong>Analog — the whole graph relaxes at once.</strong> A digital walker flips one spin per tick. A Kerr slab and a CIM let every coupling happen in the same instant.</p>
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <a href="apps/handwriting-ai-lab"><img src="proxy/www/stills/handwriting.svg" width="100%" alt="A handwritten 4, hidden-unit templates, and a frozen digit guess" /></a>
+      <a href="apps/handwriting-ai-lab"><img src="proxy/www/stills/handwriting.png" width="100%" alt="A handwritten 4, hidden-unit templates, and a frozen digit guess" /></a>
       <p><strong>Handwriting — a lesson writes the weights. Asking does not.</strong> Draw a digit, run a lesson, then freeze the net and inspect the templates.</p>
     </td>
     <td width="50%">
-      <a href="apps/dogfight-ai-lab"><img src="proxy/www/stills/dogfight.svg" width="100%" alt="Two planes turning inside a square gun-fight arena" /></a>
+      <a href="apps/dogfight-ai-lab"><img src="proxy/www/stills/dogfight.png" width="100%" alt="Two planes turning inside a square gun-fight arena" /></a>
       <p><strong>Dogfight — empty brains. Welded guns. Last plane standing.</strong> Yaw is capped by turn radius. They learn by crashing, missing, and not dying.</p>
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <a href="apps/swarm-memory-lab"><img src="proxy/www/stills/swarm.svg" width="100%" alt="Pack drones steering by a decaying prey-scent map" /></a>
+      <a href="apps/swarm-memory-lab"><img src="proxy/www/stills/swarm.png" width="100%" alt="Pack drones steering by a decaying prey-scent map" /></a>
       <p><strong>Swarm — one hunter's eyes become the pack's map.</strong> Prey scent decays on a 16×16 blackboard. Isolated, blackboard, or hive.</p>
     </td>
     <td width="50%">
-      <a href="apps/wave-rider-lab"><img src="proxy/www/stills/waves.svg" width="100%" alt="A pitched hull riding stacked Gerstner waves" /></a>
+      <a href="apps/wave-rider-lab"><img src="proxy/www/stills/waves.png" width="100%" alt="A pitched hull riding stacked Gerstner waves" /></a>
       <p><strong>Waves — heave from the hull, not a canned path.</strong> Stack Gerstner layers and let strip-theory buoyancy pitch the boat in real time.</p>
     </td>
   </tr>
