@@ -1,6 +1,6 @@
 # Wave Lab
 
-<img src="../../proxy/www/stills/waves.png" width="100%" alt="A pitched hull riding stacked Gerstner waves" />
+<img src="../../docs/screenshots/waves.png" width="100%" alt="Wave lab: strip-theory hull on a swell" />
 
 Educational seakeeping bench: stack Gerstner seas, steer a hull through them,
 and watch **strip-theory buoyancy** heave and pitch the boat. Side view or a

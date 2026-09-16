@@ -1,6 +1,6 @@
 # Dogfight AI Lab
 
-<img src="../../proxy/www/stills/dogfight.png" width="100%" alt="Two planes turning inside a square gun-fight arena" />
+<img src="../../docs/screenshots/dogfight.png" width="100%" alt="Dogfight lab: last-plane-standing arena and flight controls" />
 
 Educational simulation of empty policies learning a 2-D **last-plane-standing**
 gun fight by trial and error. Each plane has a hard **turn radius** and can

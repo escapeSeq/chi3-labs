@@ -1,6 +1,6 @@
 # χ³ Analog Lab
 
-<img src="../../proxy/www/stills/analog.png" width="100%" alt="Oscillators split into two communities on a Max-Cut graph" />
+<img src="../../docs/screenshots/analog.png" width="100%" alt="Analog lab: Ising / CIM bench next to a sequential walker" />
 
 Educational simulation of **analog nonlinear (χ³) computing**: a coherent Ising
 machine that relaxes a Max-Cut instance in analog time, shown next to a digital
