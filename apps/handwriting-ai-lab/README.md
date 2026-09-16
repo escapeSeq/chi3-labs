@@ -33,9 +33,16 @@ uvicorn app.main:app --host 0.0.0.0 --port 8081
    backprop → weight nudge. The loss chalk-line should fall.
 2. **Ask.** You write a digit with the mouse. The net only runs the forward
    pass. Weights stay frozen — that is inference.
+3. **Inspect.** The 20 hidden templates and the 10×20 vote matrix are shown
+   with a short English reading of what each unit is hunting for and which
+   digits listen to it.
 
 A starter classroom of stroke-drawn digits is seeded so a lesson works before
 anyone writes. Your own handwriting can be added on top.
+
+Weights live on **`/data`** (`model.npz`, `lab.json`). On Railway, attach a
+volume at `/data` — never `/app` or `/lab`. The lab honors `HANDWRITING_DATA`
+or `RAILWAY_VOLUME_MOUNT_PATH` if you mount elsewhere.
 
 ## Tests
 

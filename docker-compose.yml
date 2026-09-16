@@ -40,6 +40,9 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       PORT: "8081"
+      HANDWRITING_DATA: /data
+    volumes:
+      - handwriting-brains:/data
 
   dogfight-ai-lab:
     build:
@@ -102,3 +105,4 @@ services:
 volumes:
   dogfight-brains:
   swarm-memory:
+  handwriting-brains:

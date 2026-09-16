@@ -1,4 +1,5 @@
 const GRID = 16;
+const HIDDEN = 20;
 const state = {
   mode: "teach",
   label: 0,
@@ -10,6 +11,9 @@ const state = {
   lastTrain: null,
   templates: null,
   inferWait: null,
+  inspect: null,
+  unit: 0,
+  digit: 0,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -137,9 +141,14 @@ function setMode(mode) {
   state.mode = mode;
   document.body.classList.toggle("is-ask", mode === "ask");
   document.body.classList.toggle("is-teach", mode === "teach");
+  document.body.classList.toggle("is-inspect", mode === "inspect");
   document.querySelectorAll(".mode").forEach((btn) => {
     btn.classList.toggle("is-on", btn.dataset.mode === mode);
   });
+  if (mode === "inspect") {
+    loadInspect();
+    return;
+  }
   $("pad-hint").textContent =
     mode === "teach"
       ? "Write a digit, pick its label, keep the page. Then run a lesson."
@@ -206,6 +215,7 @@ $("train").addEventListener("click", async () => {
     if (!res.ok) throw new Error(body.detail || "Lesson failed");
     state.lastTrain = body;
     playLesson(body);
+    loadInspect(false);
   } catch (err) {
     $("train-status").textContent = err.message;
   } finally {
@@ -222,6 +232,7 @@ $("forget").addEventListener("click", async () => {
   paintTemplates([]);
   $("guess-digit").textContent = "?";
   highlightStep(0);
+  loadInspect(false);
 });
 
 $("read").addEventListener("click", () => inferNow());
@@ -415,6 +426,200 @@ function fillCounts(counts, total) {
   $("class-count").textContent = `${total} pages`;
 }
 
+function heatColor(v) {
+  const pos = Math.max(0, v);
+  const neg = Math.max(0, -v);
+  return `rgb(${Math.round(8 + 224 * neg)}, ${Math.round(16 + 77 * pos + 77 * neg)}, ${Math.round(20 + 181 * pos)})`;
+}
+
+function paintHeatmap(canvas, grid, pad = 0) {
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#081014";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (!grid || !grid.length) return;
+  const inner = Math.min(canvas.width, canvas.height) - pad * 2;
+  const cell = inner / GRID;
+  const ox = (canvas.width - inner) / 2;
+  const oy = (canvas.height - inner) / 2;
+  for (let y = 0; y < GRID; y += 1) {
+    for (let x = 0; x < GRID; x += 1) {
+      ctx.fillStyle = heatColor(grid[y][x]);
+      ctx.fillRect(ox + x * cell, oy + y * cell, Math.max(cell - 0.4, 1), Math.max(cell - 0.4, 1));
+    }
+  }
+}
+
+function paintUnitGrid() {
+  const canvas = $("unit-grid");
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#081014";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const hidden = state.inspect?.hidden || [];
+  if (!hidden.length) return;
+  const cols = 5;
+  const rows = 4;
+  const labelH = 16;
+  const tileW = canvas.width / cols;
+  const tileH = canvas.height / rows;
+  hidden.forEach((unit, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const ox = col * tileW;
+    const oy = row * tileH;
+    const cell = (tileW - 10) / GRID;
+    const gx = ox + 5;
+    const gy = oy + labelH;
+    for (let y = 0; y < GRID; y += 1) {
+      for (let x = 0; x < GRID; x += 1) {
+        ctx.fillStyle = heatColor(unit.template[y][x]);
+        ctx.fillRect(gx + x * cell, gy + y * cell, Math.max(cell - 0.3, 1), Math.max(cell - 0.3, 1));
+      }
+    }
+    ctx.font = "11px ui-monospace, monospace";
+    ctx.fillStyle = i === state.unit ? "#e6c36a" : "#8aa09a";
+    ctx.fillText(`H${i}`, ox + 6, oy + 12);
+    if (i === state.unit) {
+      ctx.strokeStyle = "#e6c36a";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(ox + 2, oy + 2, tileW - 4, tileH - 4);
+    }
+  });
+}
+
+function paintVoteGrid() {
+  const canvas = $("vote-grid");
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#081014";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const votes = state.inspect?.votes;
+  if (!votes) return;
+  const left = 28;
+  const top = 10;
+  const cellW = (canvas.width - left - 8) / HIDDEN;
+  const cellH = (canvas.height - top - 8) / 10;
+  let peak = 0.2;
+  votes.forEach((row) => {
+    row.forEach((v) => {
+      peak = Math.max(peak, Math.abs(v));
+    });
+  });
+  votes.forEach((row, d) => {
+    const y = top + d * cellH;
+    ctx.fillStyle = d === state.digit ? "#e6c36a" : "#8aa09a";
+    ctx.font = "11px ui-monospace, monospace";
+    ctx.fillText(String(d), 8, y + cellH * 0.7);
+    row.forEach((v, i) => {
+      const n = v / peak;
+      ctx.fillStyle = heatColor(n);
+      ctx.fillRect(left + i * cellW, y + 1, Math.max(cellW - 1, 1), Math.max(cellH - 2, 1));
+      if (i === state.unit) {
+        ctx.strokeStyle = "rgba(230, 195, 106, 0.85)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(left + i * cellW, y + 1, Math.max(cellW - 1, 1), Math.max(cellH - 2, 1));
+      }
+    });
+    if (d === state.digit) {
+      ctx.strokeStyle = "#e6c36a";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(left, y + 1, canvas.width - left - 8, Math.max(cellH - 2, 1));
+    }
+  });
+}
+
+function renderInspect() {
+  const snap = state.inspect;
+  if (!snap) return;
+  $("inspect-story").textContent = snap.architecture?.story || "";
+  $("template-legend").textContent = snap.legend?.template || $("template-legend").textContent;
+  $("vote-legend").textContent = snap.legend?.votes || $("vote-legend").textContent;
+  $("inspect-pill").textContent = snap.trained ? "trained · on disk" : snap.persisted ? "untrained · on disk" : "in memory";
+  const acc = snap.metrics?.acc;
+  const loss = snap.metrics?.loss;
+  const when = snap.saved_at ? `${snap.saved_at.slice(0, 19).replace("T", " ")} UTC` : "not saved yet";
+  $("inspect-status").textContent = snap.trained
+    ? `Last lesson kept at ${when}. Classroom accuracy ${acc != null ? `${(acc * 100).toFixed(0)}%` : "—"}, loss ${loss != null ? loss.toFixed(2) : "—"}. Path ${snap.data_dir || "/data"}.`
+    : `No lesson is stored yet. Templates below are still close to random. After you teach, weights land in ${snap.data_dir || "/data"}.`;
+  const stats = snap.stats || {};
+  $("inspect-stats").innerHTML = [
+    ["hidden alive", `${stats.hidden_alive ?? "—"} / ${stats.hidden_total ?? HIDDEN}`],
+    ["W1 RMS", stats.w1_rms != null ? stats.w1_rms.toFixed(3) : "—"],
+    ["W2 RMS", stats.w2_rms != null ? stats.w2_rms.toFixed(3) : "—"],
+    ["saved", snap.persisted ? "yes" : "no"],
+  ]
+    .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
+    .join("");
+
+  const unit = snap.hidden?.[state.unit];
+  if (unit) {
+    $("unit-title").textContent = `Hidden unit ${unit.index}` + (unit.shape ? ` · ${unit.shape}` : "");
+    $("unit-blurb").textContent = unit.blurb;
+    const favor = (unit.votes_for || []).map((v) => `${v.digit} (${v.weight})`).join(", ") || "none yet";
+    const against = (unit.votes_against || []).map((v) => `${v.digit} (${v.weight})`).join(", ") || "none yet";
+    $("unit-votes").textContent = `Raises ${favor}. Suppresses ${against}. Bias ${unit.bias}.`;
+    paintHeatmap($("unit-zoom"), unit.template, 8);
+  }
+  const digit = snap.digits?.[state.digit];
+  if (digit) $("digit-blurb").textContent = digit.blurb;
+  document.querySelectorAll("#digit-picks button").forEach((btn, i) => {
+    btn.classList.toggle("is-on", i === state.digit);
+  });
+  paintUnitGrid();
+  paintVoteGrid();
+}
+
+async function loadInspect(render = true) {
+  const res = await fetch("api/inspect");
+  const body = await res.json();
+  state.inspect = body;
+  state.templates = (body.hidden || []).slice(0, 8).map((unit) => unit.template);
+  if (state.templates.length) paintTemplates(state.templates);
+  if (render && state.mode === "inspect") renderInspect();
+}
+
+function gridIndex(event, canvas, cols, rows) {
+  const rect = canvas.getBoundingClientRect();
+  const x = (event.clientX - rect.left) / rect.width;
+  const y = (event.clientY - rect.top) / rect.height;
+  const col = Math.min(cols - 1, Math.max(0, Math.floor(x * cols)));
+  const row = Math.min(rows - 1, Math.max(0, Math.floor(y * rows)));
+  return { col, row };
+}
+
+$("unit-grid").addEventListener("click", (event) => {
+  const { col, row } = gridIndex(event, $("unit-grid"), 5, 4);
+  const i = row * 5 + col;
+  if (i < HIDDEN) {
+    state.unit = i;
+    renderInspect();
+  }
+});
+
+$("vote-grid").addEventListener("click", (event) => {
+  const canvas = $("vote-grid");
+  const rect = canvas.getBoundingClientRect();
+  const x = (event.clientX - rect.left) / rect.width;
+  const y = (event.clientY - rect.top) / rect.height;
+  const left = 28 / canvas.width;
+  const col = Math.min(HIDDEN - 1, Math.max(0, Math.floor(((x - left) / (1 - left)) * HIDDEN)));
+  const row = Math.min(9, Math.max(0, Math.floor(y * 10)));
+  state.unit = col;
+  state.digit = row;
+  renderInspect();
+});
+
+const digitBox = $("digit-picks");
+for (let d = 0; d <= 9; d += 1) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = String(d);
+  if (d === 0) b.classList.add("is-on");
+  b.addEventListener("click", () => {
+    state.digit = d;
+    renderInspect();
+  });
+  digitBox.appendChild(b);
+}
+
 async function boot() {
   clearPad();
   paintSees(zeros());
@@ -424,6 +629,11 @@ async function boot() {
   const stateRes = await fetch("api/state");
   const snap = await stateRes.json();
   fillCounts(snap.counts, snap.examples);
+  if (snap.trained && snap.metrics) {
+    $("train-status").textContent =
+      `A lesson is already on disk · loss ${Number(snap.metrics.loss).toFixed(2)} · classroom accuracy ${(Number(snap.metrics.acc) * 100).toFixed(0)}%.`;
+  }
+  await loadInspect(false);
 }
 
 boot();

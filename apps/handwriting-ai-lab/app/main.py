@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
+import json
+import os
+import threading
+import time
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
@@ -13,11 +18,16 @@ from pydantic import BaseModel, Field
 from . import digits, network
 
 STATIC = Path(__file__).parent / "static"
+DATA_DIR = Path(
+    os.environ.get("HANDWRITING_DATA")
+    or os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+    or "/data"
+)
 
 app = FastAPI(
     title="Handwriting AI Lab",
     description="Educational visualization of training versus using a neural net.",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 
@@ -36,7 +46,8 @@ class InferIn(BaseModel):
 
 
 class LabState:
-    def __init__(self) -> None:
+    def __init__(self, data_dir: Path | None = DATA_DIR) -> None:
+        self.data_dir = Path(data_dir) if data_dir is not None else None
         self.rng = np.random.default_rng(4)
         self.model = network.MLP(self.rng)
         self.x = np.zeros((0, 16, 16), dtype=float)
@@ -44,9 +55,12 @@ class LabState:
         self.user_count = 0
         self.trained = False
         self.last_metrics: dict | None = None
-        self.seed_classroom()
+        self.saved_at: str | None = None
+        self._lock = threading.RLock()
+        self.seed_classroom(persist=False)
+        self.restore()
 
-    def seed_classroom(self, per_class: int = 10) -> None:
+    def seed_classroom(self, per_class: int = 10, persist: bool = True) -> None:
         xs, ys = digits.classroom(per_class=per_class, seed=3)
         self.x = xs
         self.y = ys
@@ -54,6 +68,8 @@ class LabState:
         self.trained = False
         self.last_metrics = None
         self.model.reset()
+        if persist:
+            self.persist()
 
     def add_example(self, grid: np.ndarray, label: int) -> None:
         self.x = np.concatenate([self.x, grid[None, ...]], axis=0)
@@ -62,6 +78,81 @@ class LabState:
 
     def counts(self) -> list[int]:
         return [int(np.sum(self.y == k)) for k in range(10)]
+
+    def model_path(self) -> Path | None:
+        if self.data_dir is None:
+            return None
+        return self.data_dir / "model.npz"
+
+    def meta_path(self) -> Path | None:
+        if self.data_dir is None:
+            return None
+        return self.data_dir / "lab.json"
+
+    def persist(self) -> None:
+        model_path = self.model_path()
+        meta_path = self.meta_path()
+        if model_path is None or meta_path is None or self.data_dir is None:
+            return
+        with self._lock:
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+            self.model.save(model_path)
+            stamp = datetime.now(timezone.utc).isoformat()
+            tmp = meta_path.with_name(f".lab.{os.getpid()}.{time.time_ns()}.json.tmp")
+            tmp.write_text(
+                json.dumps(
+                    {
+                        "trained": self.trained,
+                        "metrics": self.last_metrics,
+                        "saved_at": stamp,
+                    }
+                )
+            )
+            tmp.replace(meta_path)
+            self.saved_at = stamp
+
+    def restore(self) -> bool:
+        model_path = self.model_path()
+        meta_path = self.meta_path()
+        if model_path is None or not model_path.is_file():
+            return False
+        try:
+            self.model.load(model_path)
+            if meta_path is not None and meta_path.is_file():
+                payload = json.loads(meta_path.read_text())
+                self.trained = bool(payload.get("trained", False))
+                metrics = payload.get("metrics")
+                self.last_metrics = metrics if isinstance(metrics, dict) else None
+                saved = payload.get("saved_at")
+                self.saved_at = saved if isinstance(saved, str) else None
+            else:
+                self.trained = True
+            return True
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            self.model.reset()
+            self.trained = False
+            self.last_metrics = None
+            self.saved_at = None
+            return False
+
+    def snapshot(self) -> dict:
+        return {
+            "examples": int(len(self.y)),
+            "user_examples": self.user_count,
+            "counts": self.counts(),
+            "trained": self.trained,
+            "metrics": self.last_metrics,
+            "hidden": network.HIDDEN,
+            "grid": 16,
+            "data_dir": str(self.data_dir) if self.data_dir is not None else None,
+            "persisted": bool(self.model_path() is not None and self.model_path().is_file()),
+            "saved_at": self.saved_at,
+        }
+
+    def inspect(self) -> dict:
+        body = self.snapshot()
+        body.update(self.model.inspect(trained=self.trained))
+        return body
 
 
 STATE = LabState()
@@ -84,15 +175,12 @@ def health() -> dict[str, str]:
 
 @app.get("/api/state")
 def lab_state() -> dict:
-    return {
-        "examples": int(len(STATE.y)),
-        "user_examples": STATE.user_count,
-        "counts": STATE.counts(),
-        "trained": STATE.trained,
-        "metrics": STATE.last_metrics,
-        "hidden": network.HIDDEN,
-        "grid": 16,
-    }
+    return STATE.snapshot()
+
+
+@app.get("/api/inspect")
+def inspect() -> dict:
+    return STATE.inspect()
 
 
 @app.post("/api/seed")
@@ -106,6 +194,7 @@ def reset_model() -> dict:
     STATE.model.reset()
     STATE.trained = False
     STATE.last_metrics = None
+    STATE.persist()
     return lab_state()
 
 
@@ -134,6 +223,7 @@ def train(body: TrainIn) -> dict:
         "acc": trace["final_acc"],
         "epochs": body.epochs,
     }
+    STATE.persist()
     return {
         "before": {"loss": before_loss, "acc": before_acc},
         **trace,
@@ -143,7 +233,7 @@ def train(body: TrainIn) -> dict:
             f"The net looked at {len(STATE.y)} labeled pages {body.epochs} times. "
             f"Loss moved {before_loss:.2f} → {trace['final_loss']:.2f}; "
             f"classroom accuracy {before_acc:.0%} → {trace['final_acc']:.0%}. "
-            "Those new weights are what it will use when you ask it to read."
+            "Those new weights are saved on disk and used when you ask it to read."
         ),
     }
 

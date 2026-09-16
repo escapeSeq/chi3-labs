@@ -27,6 +27,7 @@ body {
 .mast,
 .modes,
 main,
+.inspect-lab,
 .steps,
 footer {
   position: relative;
@@ -132,6 +133,7 @@ footer,
 
 .modes {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
   margin: 0.6rem auto 1rem;
 }
@@ -251,8 +253,103 @@ input[type="range"] {
 }
 
 body.is-ask .teach-only,
-body.is-teach .ask-only {
+body.is-teach .ask-only,
+body.is-inspect .teach-only,
+body.is-inspect .ask-only,
+body.is-inspect .live-only,
+body:not(.is-inspect) .inspect-only {
   display: none;
+}
+
+.inspect-lab {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+  align-items: start;
+}
+
+.inspect-story {
+  grid-column: 1 / -1;
+}
+
+.inspect-story,
+.inspect-units,
+.inspect-digits {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 0.85rem 1rem;
+}
+
+.inspect-story header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.inspect-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 0.8rem 0 0;
+}
+
+.inspect-stats div {
+  border: 1px solid var(--line);
+  padding: 0.45rem 0.5rem;
+  background: #0f1a1e;
+}
+
+.inspect-stats dt {
+  margin: 0;
+  color: var(--mute);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inspect-stats dd {
+  margin: 0.2rem 0 0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--amber);
+  font-size: 0.95rem;
+}
+
+.unit-detail {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 0.85rem;
+  margin-top: 0.8rem;
+  align-items: start;
+}
+
+#unit-zoom {
+  width: 160px;
+  height: 160px;
+}
+
+.digit-picks {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.3rem;
+  margin: 0.7rem 0;
+}
+
+.digit-picks button {
+  margin: 0;
+  padding: 0.35rem 0;
+}
+
+.digit-picks button.is-on {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+#digit-blurb,
+#unit-blurb {
+  min-height: 4.5rem;
 }
 
 .counts {
@@ -366,9 +463,16 @@ footer {
 
 @media (max-width: 1080px) {
   main,
+  .inspect-lab,
+  .inspect-stats,
+  .unit-detail,
   .steps ol,
   .mini-loop {
     grid-template-columns: 1fr;
+  }
+
+  .inspect-story {
+    grid-column: auto;
   }
 }
 

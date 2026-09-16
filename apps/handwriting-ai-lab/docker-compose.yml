@@ -6,3 +6,10 @@ services:
     restart: unless-stopped
     environment:
       PYTHONUNBUFFERED: "1"
+      PORT: "8081"
+      HANDWRITING_DATA: /data
+    volumes:
+      - handwriting-brains:/data
+
+volumes:
+  handwriting-brains:

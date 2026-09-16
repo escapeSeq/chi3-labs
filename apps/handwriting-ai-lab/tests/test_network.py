@@ -39,3 +39,19 @@ def test_softmax_probs_sum_to_one():
     out = model.forward(np.zeros((16, 16)))
     assert out["probs"].shape == (1, 10)
     assert abs(float(out["probs"].sum()) - 1.0) < 1e-6
+
+
+def test_weights_round_trip_on_disk(tmp_path):
+    model = MLP(np.random.default_rng(2))
+    xs, ys = classroom(per_class=6, seed=1)
+    train_trace(model, xs.reshape(len(ys), 256), ys, epochs=4, lr=0.3)
+    path = tmp_path / "model.npz"
+    model.save(path)
+    clone = MLP(np.random.default_rng(99))
+    clone.load(path)
+    assert np.allclose(clone.W1, model.W1)
+    assert np.allclose(clone.W2, model.W2)
+    report = clone.inspect(trained=True)
+    assert len(report["hidden"]) == 20
+    assert report["trained"] is True
+    assert "random noise" not in report["hidden"][0]["blurb"]

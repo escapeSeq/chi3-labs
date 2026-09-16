@@ -40,9 +40,10 @@
     <nav class="modes" role="tablist">
       <button class="mode is-on" data-mode="teach" type="button">1. Teach the net</button>
       <button class="mode" data-mode="ask" type="button">2. Ask the net</button>
+      <button class="mode" data-mode="inspect" type="button">3. Inspect the net</button>
     </nav>
 
-    <main>
+    <main id="workspace" class="live-only">
       <section class="pad-col">
         <h2>Ink pad</h2>
         <p class="hint" id="pad-hint">Write a digit 0–9. Hold the mouse and draw.</p>
@@ -121,12 +122,63 @@
       </section>
     </main>
 
-    <aside class="steps" aria-label="Training versus using">
+    <section id="inspect-lab" class="inspect-lab inspect-only" aria-label="Inspect the trained weights">
+      <article class="inspect-story">
+        <header>
+          <h2>The weights on disk</h2>
+          <span id="inspect-pill" class="pill">not saved</span>
+        </header>
+        <p id="inspect-story" class="hint"></p>
+        <p id="inspect-status" class="hint">Loading weights…</p>
+        <dl class="inspect-stats" id="inspect-stats"></dl>
+      </article>
+
+      <article class="inspect-units">
+        <h2>Hidden templates</h2>
+        <p class="hint" id="template-legend">
+          Each tile is one hidden neuron’s 16×16 template. Click a unit to read
+          what it is hunting for.
+        </p>
+        <canvas id="unit-grid" width="640" height="560"></canvas>
+        <div class="unit-detail">
+          <canvas id="unit-zoom" width="256" height="256"></canvas>
+          <div>
+            <h3 id="unit-title">Hidden unit</h3>
+            <p id="unit-blurb" class="hint">Pick a template.</p>
+            <p id="unit-votes" class="hint"></p>
+          </div>
+        </div>
+      </article>
+
+      <article class="inspect-digits">
+        <h2>How each digit votes</h2>
+        <p class="hint" id="vote-legend">
+          Rows are digits 0–9. Columns are the 20 hidden units. Click a digit
+          or a cell.
+        </p>
+        <canvas id="vote-grid" width="640" height="300"></canvas>
+        <div class="digit-picks" id="digit-picks"></div>
+        <p id="digit-blurb" class="hint">Pick a digit to see which templates it listens to.</p>
+      </article>
+    </section>
+
+    <aside class="steps live-only" aria-label="Training versus using">
       <h2>Training vs using</h2>
       <p>
         A lesson walks all five steps, including the red ones: compare, blame,
         nudge. Asking the net does only the forward guess. The weights stay
         put — that is using, not learning.
+      </p>
+    </aside>
+
+    <aside class="steps inspect-only" aria-label="How to read the weights">
+      <h2>How to read the weights</h2>
+      <p>
+        Cyan in a template means “ink here helps this neuron fire.” Red means
+        “ink here is evidence against.” After ReLU, a negative score is silence,
+        and a silent unit cannot vote. The vote grid is the second layer: cyan
+        raises a digit, red suppresses it. A lesson writes these numbers onto
+        disk at <code>/data</code>; a restart reloads them.
       </p>
     </aside>
 

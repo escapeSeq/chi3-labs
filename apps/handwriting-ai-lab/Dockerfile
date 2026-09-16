@@ -7,6 +7,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 
+RUN mkdir -p /data
+
 ENV PORT=8081
 EXPOSE 8081
 
