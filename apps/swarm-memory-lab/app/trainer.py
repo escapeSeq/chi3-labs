@@ -213,6 +213,7 @@ class Academy:
         self._cancel_play = threading.Event()
         self._burst_stop = threading.Event()
         self._burst_thread: threading.Thread | None = None
+        self._burst_gen = 0
         self.burst_running = False
         self.burst_trained = 0
         self.burst_error: str | None = None
@@ -500,8 +501,11 @@ class Academy:
                 break
             world.extra_turns = extra_turns(world)
             if self.uses_memory():
+                by_name = {plane.name: plane for plane in world.planes}
                 for name, turn in list(world.extra_turns.items()):
-                    plane = next(p for p in world.planes if p.name == name)
+                    plane = by_name.get(name)
+                    if plane is None:
+                        continue
                     scent = self.memory.scent_turn(plane)
                     world.extra_turns[name] = float(np.clip(turn + self.memory_gain * scent, -1.0, 1.0))
             actions: dict[str, int] = {}
@@ -621,15 +625,13 @@ class Academy:
     def start_burst(self, lr: float = 0.014) -> dict:
         if self.burst_running:
             return self.burst_status()
-        self._burst_stop.set()
-        leftover = self._burst_thread
-        if leftover is not None and leftover.is_alive():
-            leftover.join(timeout=2)
+        self._burst_gen += 1
+        gen = self._burst_gen
         self._burst_stop.clear()
         self.burst_running = True
         self.burst_trained = 0
         self.burst_error = None
-        self._burst_thread = threading.Thread(target=self._run_burst, args=(float(lr),), daemon=True)
+        self._burst_thread = threading.Thread(target=self._run_burst, args=(float(lr), gen), daemon=True)
         self._burst_thread.start()
         return self.burst_status()
 
@@ -639,19 +641,34 @@ class Academy:
             thread = self._burst_thread
             if thread is not None and thread.is_alive():
                 thread.join(timeout=2)
-            self.burst_running = False
+            if self._burst_thread is thread:
+                self.burst_running = False
         return self.burst_status()
 
-    def _run_burst(self, lr: float) -> None:
+    def _run_burst(self, lr: float, gen: int) -> None:
+        misses = 0
         try:
-            while not self._burst_stop.is_set():
-                self.play(learn=True, lr=lr, persist=False, trace=False)
-                self.burst_trained += 1
-                if self.burst_trained % SAVE_EVERY == 0:
-                    self.persist()
-        except Exception as exc:
-            self.burst_error = str(exc)
+            while not self._burst_stop.is_set() and gen == self._burst_gen:
+                try:
+                    self.play(learn=True, lr=lr, persist=False, trace=False)
+                    if gen != self._burst_gen:
+                        return
+                    self.burst_trained += 1
+                    misses = 0
+                    if self.burst_trained % SAVE_EVERY == 0:
+                        try:
+                            self.persist()
+                        except Exception as exc:
+                            self.burst_error = f"save failed: {exc}"
+                except Exception as exc:
+                    self.burst_error = str(exc)
+                    misses += 1
+                    if misses >= 12:
+                        break
+                    time.sleep(0.05)
         finally:
+            if gen != self._burst_gen:
+                return
             try:
                 self.persist()
             except Exception:

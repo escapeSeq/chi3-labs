@@ -32,12 +32,13 @@ def test_health_and_index():
     assert 'id="prey-plus"' in page.text
     assert 'id="hive-plus"' in page.text
     assert 'href="static/styles.css?v=swarm5"' in page.text
-    assert 'src="static/app.js?v=swarm5"' in page.text
+    assert 'src="static/app.js?v=swarm6"' in page.text
     js = client.get("/static/app.js")
     assert js.status_code == 200
     assert "api/share" in js.text
     assert "api/reset-brain" in js.text
     assert "api/prey" in js.text
+    assert "burst.running === false" in js.text
     assert page.headers.get("cache-control") == "no-store"
 
 

@@ -460,7 +460,7 @@ function startBurstPoll() {
         state.burstShown = shown;
         text("burst-read", shown ? `Burst training · ${shown.toLocaleString()} sorties` : "Burst training · 0 sorties");
       }
-      if (!burst.running) {
+      if (burst.running === false) {
         stopBurstPoll();
         setBurstControls(false);
         const snap = await (await fetch("api/state")).json();

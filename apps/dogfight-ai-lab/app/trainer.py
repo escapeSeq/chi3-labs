@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -233,8 +235,10 @@ class Academy:
         self._ensure_seat_brains(self.n_planes)
         self.lineup = default_lineup(self.n_planes)
         self._play_lock = threading.RLock()
+        self._persist_lock = threading.RLock()
         self._burst_stop = threading.Event()
         self._burst_thread: threading.Thread | None = None
+        self._burst_gen = 0
         self.burst_running = False
         self.burst_trained = 0
         self.burst_error: str | None = None
@@ -406,27 +410,28 @@ class Academy:
         paths = self.brain_paths()
         if paths is None or self.data_dir is None:
             return
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        for brain_id, slot in self.brains.items():
-            slot.policy.save(paths[brain_id])
-        tmp = paths["academy"].with_name(".academy.json.tmp")
-        tmp.write_text(
-            json.dumps(
-                {
-                    "mode": self.mode,
-                    "score": self.score.as_dict(),
-                    "curve": _jsonable(self.curve[-CURVE_KEEP:]),
-                    "scores": {key: board.as_dict() for key, board in self.scores.items()},
-                    "curves": {key: _jsonable(rows[-CURVE_KEEP:]) for key, rows in self.curves.items()},
-                    "empty": self.empty,
-                    "max_steps": self.max_steps,
-                    "n_planes": self.n_planes,
-                    "brains": [slot.meta() for slot in self.brains.values()],
-                    "lineup": self.lineup,
-                }
+        with self._persist_lock:
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+            for brain_id, slot in self.brains.items():
+                slot.policy.save(paths[brain_id])
+            tmp = paths["academy"].with_name(f".academy.{os.getpid()}.{time.time_ns()}.json.tmp")
+            tmp.write_text(
+                json.dumps(
+                    {
+                        "mode": self.mode,
+                        "score": self.score.as_dict(),
+                        "curve": _jsonable(self.curve[-CURVE_KEEP:]),
+                        "scores": {key: board.as_dict() for key, board in self.scores.items()},
+                        "curves": {key: _jsonable(rows[-CURVE_KEEP:]) for key, rows in self.curves.items()},
+                        "empty": self.empty,
+                        "max_steps": self.max_steps,
+                        "n_planes": self.n_planes,
+                        "brains": [slot.meta() for slot in self.brains.values()],
+                        "lineup": self.lineup,
+                    }
+                )
             )
-        )
-        tmp.replace(paths["academy"])
+            tmp.replace(paths["academy"])
 
     def reset_models(self, persist: bool = True) -> None:
         self.stop_burst(join=True)
@@ -895,40 +900,50 @@ class Academy:
     def start_burst(self, lr: float = 0.018) -> dict:
         if self.burst_running:
             return self.burst_status()
-        self._burst_stop.set()
-        with self._play_lock:
-            leftover = self._burst_thread
-        if leftover is not None and leftover.is_alive():
-            leftover.join(timeout=2)
+        self._burst_gen += 1
+        gen = self._burst_gen
         self._burst_stop.clear()
         self.burst_running = True
         self.burst_trained = 0
         self.burst_error = None
-        self._burst_thread = threading.Thread(target=self._run_burst, args=(float(lr),), daemon=True)
+        self._burst_thread = threading.Thread(target=self._run_burst, args=(float(lr), gen), daemon=True)
         self._burst_thread.start()
         return self.burst_status()
 
     def stop_burst(self, join: bool = False) -> dict:
         self._burst_stop.set()
         if join:
-            with self._play_lock:
-                pass
             thread = self._burst_thread
             if thread is not None and thread.is_alive():
                 thread.join(timeout=2)
-            self.burst_running = False
+            if self._burst_thread is thread:
+                self.burst_running = False
         return self.burst_status()
 
-    def _run_burst(self, lr: float) -> None:
+    def _run_burst(self, lr: float, gen: int) -> None:
+        misses = 0
         try:
-            while not self._burst_stop.is_set():
-                self.play(learn=True, lr=lr, persist=False, trace=False)
-                self.burst_trained += 1
-                if self.burst_trained % SAVE_EVERY == 0:
-                    self.persist()
-        except Exception as exc:
-            self.burst_error = str(exc)
+            while not self._burst_stop.is_set() and gen == self._burst_gen:
+                try:
+                    self.play(learn=True, lr=lr, persist=False, trace=False)
+                    if gen != self._burst_gen:
+                        return
+                    self.burst_trained += 1
+                    misses = 0
+                    if self.burst_trained % SAVE_EVERY == 0:
+                        try:
+                            self.persist()
+                        except Exception as exc:
+                            self.burst_error = f"save failed: {exc}"
+                except Exception as exc:
+                    self.burst_error = str(exc)
+                    misses += 1
+                    if misses >= 12:
+                        break
+                    time.sleep(0.05)
         finally:
+            if gen != self._burst_gen:
+                return
             try:
                 self.persist()
             except Exception:

@@ -790,7 +790,7 @@ async function pollBurst() {
     } else if (!state.burstShown) {
       text("burst-read", "Burst training · 0 sorties");
     }
-    if (!burst.running) {
+    if (burst.running === false) {
       stopBurstPoll();
       finishBurst(burst);
     }

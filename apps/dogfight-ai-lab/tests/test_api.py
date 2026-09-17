@@ -30,12 +30,13 @@ def test_health_and_index():
     assert 'id="winner-read"' in page.text
     assert "red-kills" not in page.text
     assert 'href="static/styles.css?v=draw-loss"' in page.text
-    assert 'src="static/app.js?v=draw-loss"' in page.text
+    assert 'src="static/app.js?v=burst-keep"' in page.text
     js = client.get("/static/app.js")
     assert js.status_code == 200
     assert "red-kills" not in js.text
     assert "winner-read" in js.text
     assert "timeout loss" in js.text
+    assert "burst.running === false" in js.text
     assert page.headers.get("cache-control") == "no-store"
     assert "Numbers" in page.text
     assert "/data" in page.text

@@ -26,12 +26,20 @@ ACTION_NAMES = (
 )
 W1_INIT_RMS = float(np.sqrt(2.0 / OBS))
 W2_INIT_RMS = 0.15
+WEIGHT_CLIP = 8.0
 
 
 def softmax(logits: np.ndarray) -> np.ndarray:
-    z = logits - np.max(logits, axis=-1, keepdims=True)
+    z = np.nan_to_num(np.asarray(logits, dtype=float), nan=0.0, posinf=20.0, neginf=-20.0)
+    z = z - np.max(z, axis=-1, keepdims=True)
+    z = np.clip(z, -20.0, 20.0)
     e = np.exp(z)
-    return e / np.sum(e, axis=-1, keepdims=True)
+    denom = np.sum(e, axis=-1, keepdims=True)
+    fallback = np.full_like(e, 1.0 / e.shape[-1])
+    probs = np.divide(e, denom, out=fallback.copy(), where=denom > 0)
+    probs = np.nan_to_num(probs, nan=0.0, posinf=0.0, neginf=0.0)
+    total = np.sum(probs, axis=-1, keepdims=True)
+    return np.divide(probs, total, out=fallback, where=total > 0)
 
 
 @dataclass
@@ -91,6 +99,13 @@ class Policy:
         if self.W1.shape != (HIDDEN, OBS) or self.W2.shape != (ACTIONS, HIDDEN):
             raise ValueError(f"brain file {path} has the wrong weight shapes")
 
+    def _stabilize(self) -> None:
+        for name in ("W1", "b1", "W2", "b2"):
+            raw = np.nan_to_num(getattr(self, name), nan=0.0, posinf=WEIGHT_CLIP, neginf=-WEIGHT_CLIP)
+            setattr(self, name, np.clip(raw, -WEIGHT_CLIP, WEIGHT_CLIP))
+        if not np.isfinite(self.baseline):
+            self.baseline = 0.0
+
     def forward(self, obs: np.ndarray) -> dict[str, np.ndarray]:
         x = np.asarray(obs, dtype=float).reshape(OBS)
         h = np.maximum(0.0, self.W1 @ x + self.b1)
@@ -100,8 +115,14 @@ class Policy:
 
     def act(self, obs: np.ndarray) -> tuple[int, float, dict[str, np.ndarray]]:
         out = self.forward(obs)
-        action = int(self.rng.choice(ACTIONS, p=out["probs"]))
-        logp = float(np.log(np.clip(out["probs"][action], 1e-8, 1.0)))
+        probs = np.asarray(out["probs"], dtype=float).reshape(ACTIONS)
+        if (not np.all(np.isfinite(probs))) or float(probs.sum()) <= 0:
+            probs = np.full(ACTIONS, 1.0 / ACTIONS)
+        else:
+            probs = probs / float(probs.sum())
+        out["probs"] = probs
+        action = int(self.rng.choice(ACTIONS, p=probs))
+        logp = float(np.log(np.clip(probs[action], 1e-8, 1.0)))
         return action, logp, out
 
     def entropy(self, obs: np.ndarray) -> float:
@@ -185,6 +206,7 @@ class Policy:
         self.b1 -= lr * db1 / n
         self.W2 -= lr * dW2 / n
         self.b2 -= lr * db2 / n
+        self._stabilize()
         self.updates += 1
         hist = np.bincount([int(action) for _, action, _ in rollout], minlength=ACTIONS)
         fire = float(hist[3:].sum() / n)
