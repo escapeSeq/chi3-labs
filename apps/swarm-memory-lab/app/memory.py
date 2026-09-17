@@ -17,7 +17,7 @@ if __package__:
 else:
     from physics import ARENA, DT, Plane, wrap_angle
 
-GRID = 32
+GRID = 64
 CHANNELS = ("prey", "danger", "kill", "traffic")
 TAU = 2.8
 
@@ -77,7 +77,8 @@ class SharedMemory:
         return cx, cy, min(1.0, mass / 8.0)
 
     def readout(self, me: Plane) -> dict[str, float]:
-        px, py, mass = self.centroid("prey")
+        nx, ny, mass = self.centroid("prey")
+        px, py = nx * ARENA, ny * ARENA
         dx, dy = px - me.x, py - me.y
         c, s = np.cos(me.heading), np.sin(me.heading)
         fwd = dx * c + dy * s
@@ -91,8 +92,8 @@ class SharedMemory:
             "mem_right": float(np.clip(right, -1.0, 1.0)),
             "mem_heat": float(np.clip(heat, 0.0, 1.0)),
             "mem_kill": float(np.clip(kill, 0.0, 1.0)),
-            "prey_x": px,
-            "prey_y": py,
+            "prey_x": nx,
+            "prey_y": ny,
             "prey_mass": mass,
         }
 
@@ -100,7 +101,7 @@ class SharedMemory:
         feat = self.readout(me)
         if feat["prey_mass"] < 0.05:
             return 0.0
-        bearing = wrap_angle(np.arctan2(feat["prey_y"] - me.y, feat["prey_x"] - me.x) - me.heading)
+        bearing = wrap_angle(np.arctan2(feat["prey_y"] * ARENA - me.y, feat["prey_x"] * ARENA - me.x) - me.heading)
         return float(np.clip(bearing / (np.pi / 2), -1.0, 1.0))
 
     def energy(self) -> dict[str, float]:

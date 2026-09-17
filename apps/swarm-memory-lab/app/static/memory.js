@@ -1,7 +1,7 @@
 import { ARENA, DT, wrapAngle } from "./physics.js";
 import { clip } from "./rng.js";
 
-export const GRID = 32;
+export const GRID = 64;
 export const CHANNELS = ["prey", "danger", "kill", "traffic"];
 export const TAU = 2.8;
 
@@ -75,7 +75,9 @@ export class SharedMemory {
   }
 
   readout(me) {
-    const [px, py, mass] = this.centroid("prey");
+    const [nx, ny, mass] = this.centroid("prey");
+    const px = nx * ARENA;
+    const py = ny * ARENA;
     let dx = px - me.x;
     let dy = py - me.y;
     const c = Math.cos(me.heading);
@@ -93,8 +95,8 @@ export class SharedMemory {
       mem_right: clip(right, -1, 1),
       mem_heat: clip(heat, 0, 1),
       mem_kill: clip(kill, 0, 1),
-      prey_x: px,
-      prey_y: py,
+      prey_x: nx,
+      prey_y: ny,
       prey_mass: mass,
     };
   }
@@ -102,7 +104,7 @@ export class SharedMemory {
   scentTurn(me) {
     const feat = this.readout(me);
     if (feat.prey_mass < 0.05) return 0;
-    const bearing = wrapAngle(Math.atan2(feat.prey_y - me.y, feat.prey_x - me.x) - me.heading);
+    const bearing = wrapAngle(Math.atan2(feat.prey_y * ARENA - me.y, feat.prey_x * ARENA - me.x) - me.heading);
     return clip(bearing / (Math.PI / 2), -1, 1);
   }
 

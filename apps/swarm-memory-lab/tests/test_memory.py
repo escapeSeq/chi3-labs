@@ -1,18 +1,18 @@
 import numpy as np
 
 from app.memory import SharedMemory
-from app.physics import Plane
+from app.physics import ARENA, Plane
 from app.trainer import Academy, SHARE_HIVE, SHARE_ISOLATED, SHARE_BOARD
 
 
 def test_splat_and_centroid():
     mem = SharedMemory()
-    mem.splat("prey", 0.25, 0.25, 1.0)
+    mem.splat("prey", 0.25 * ARENA, 0.25 * ARENA, 1.0)
     cx, cy, mass = mem.centroid("prey")
     assert mass > 0
     assert abs(cx - 0.25) < 0.12
     assert abs(cy - 0.25) < 0.12
-    plane = Plane("p2", 1, 0.25, 0.25, 0.0, role="pack")
+    plane = Plane("p2", 1, 0.25 * ARENA, 0.25 * ARENA, 0.0, role="pack")
     feat = mem.readout(plane)
     assert feat["prey_mass"] > 0
     assert feat["mem_heat"] >= 0

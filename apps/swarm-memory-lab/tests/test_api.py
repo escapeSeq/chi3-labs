@@ -23,7 +23,7 @@ def test_health_and_index():
     assert 'id="prey-plus"' in page.text
     assert 'id="hive-plus"' in page.text
     assert 'href="static/styles.css?v=swarm5"' in page.text
-    assert 'src="static/app.js?v=client-academy"' in page.text
+    assert 'src="static/app.js?v=field4"' in page.text
     js = client.get("/static/app.js")
     assert js.status_code == 200
     assert "createAcademyClient" in js.text

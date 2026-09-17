@@ -7,9 +7,9 @@ from dataclasses import dataclass
 import numpy as np
 
 if __package__:
-    from .physics import Plane, World, wrap_angle
+    from .physics import ARENA, Plane, World, wrap_angle
 else:
-    from physics import Plane, World, wrap_angle
+    from physics import ARENA, Plane, World, wrap_angle
 
 ROLES = ("point", "flank_l", "flank_r", "cutter")
 
@@ -121,11 +121,11 @@ def forces(me: Plane, world: World, *, k_sep: float = 0.55, k_ali: float = 0.22,
         mates = [p for p in world.preys_living() if p.name != me.name]
         sep = _separation(me, mates)
         wall_turn = 0.0
-        margin_l, margin_r = me.x, 1.0 - me.x
-        margin_b, margin_t = me.y, 1.0 - me.y
+        margin_l, margin_r = me.x, ARENA - me.x
+        margin_b, margin_t = me.y, ARENA - me.y
         if min(margin_l, margin_r, margin_b, margin_t) < 0.16:
-            inward_x = 0.5
-            inward_y = 0.5
+            inward_x = ARENA / 2
+            inward_y = ARENA / 2
             wall_turn = _steer_toward(me, inward_x, inward_y)
         mix = float(np.clip(0.65 * flee + 0.35 * sep + 0.55 * wall_turn, -1.0, 1.0))
         return SwarmForces(sep, 0.0, 0.0, flee, mix)

@@ -33,7 +33,7 @@ const state = {
   frames: [],
   i: 0,
   curve: [],
-  physics: { turn_radius: 0.06, arena: 1, n_planes: 5, dt: 0.05 },
+  physics: { turn_radius: 0.06, arena: 2, n_planes: 5, dt: 0.05, sense_range: 0.4 },
   running: true,
   flightId: 0,
   lastMemory: null,
@@ -61,7 +61,13 @@ function seatColor(i) {
 
 function xy(v) {
   const pad = 28;
-  return pad + v * (field.width - pad * 2);
+  const arena = state.physics.arena || 2;
+  return pad + (v / arena) * (field.width - pad * 2);
+}
+
+function fieldScale() {
+  const arena = state.physics.arena || 2;
+  return (field.width - 56) / arena;
 }
 
 function clamp(n, lo, hi) {
@@ -543,7 +549,7 @@ function drawField(frame) {
   const livingPrey = planes.filter((p) => p.role === "prey" && p.alive);
   for (const prey of livingPrey) {
     ctx.beginPath();
-    ctx.arc(xy(prey.x), xy(prey.y), sense * (field.width - 56), 0, Math.PI * 2);
+    ctx.arc(xy(prey.x), xy(prey.y), sense * fieldScale(), 0, Math.PI * 2);
     ctx.strokeStyle = "rgba(230,195,106,0.18)";
     ctx.setLineDash([4, 6]);
     ctx.stroke();
@@ -574,7 +580,7 @@ function drawField(frame) {
 function paintHeat(ctx, memory) {
   const layers = memory?.layers;
   if (!layers) return;
-  const grid = memory.grid || layers.prey?.length || 32;
+  const grid = memory.grid || layers.prey?.length || 64;
   const cell = (field.width - 56) / grid;
   const origin = 28;
   for (let j = 0; j < grid; j += 1) {
@@ -607,7 +613,7 @@ function drawPlane(ctx, p, color) {
     const right = p.heading - Math.PI / 2;
     for (const side of [left, right]) {
       ctx.beginPath();
-      ctx.arc(xy(p.x + r * Math.cos(side)), xy(p.y + r * Math.sin(side)), r * (field.width - 56), 0, Math.PI * 2);
+      ctx.arc(xy(p.x + r * Math.cos(side)), xy(p.y + r * Math.sin(side)), r * fieldScale(), 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
@@ -658,7 +664,7 @@ function paintMemory(memory) {
     ctx.fillText("Map off in isolated mode.", 24, 36);
     return;
   }
-  const grid = memory.grid || 32;
+  const grid = memory.grid || 64;
   const cw = canvas.width / grid;
   const ch = canvas.height / grid;
   for (let j = 0; j < grid; j += 1) {

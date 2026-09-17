@@ -1,4 +1,4 @@
-import { wrapAngle } from "./physics.js";
+import { ARENA, wrapAngle } from "./physics.js";
 import { clip } from "./rng.js";
 
 export const ROLES = ["point", "flank_l", "flank_r", "cutter"];
@@ -105,10 +105,10 @@ export function forces(me, world, kSep = 0.55, kAli = 0.22, kCoh = 0.18, kRole =
     const sep = separation(me, mates);
     let wallTurn = 0;
     const marginL = me.x;
-    const marginR = 1 - me.x;
+    const marginR = ARENA - me.x;
     const marginB = me.y;
-    const marginT = 1 - me.y;
-    if (Math.min(marginL, marginR, marginB, marginT) < 0.16) wallTurn = steerToward(me, 0.5, 0.5);
+    const marginT = ARENA - me.y;
+    if (Math.min(marginL, marginR, marginB, marginT) < 0.16) wallTurn = steerToward(me, ARENA / 2, ARENA / 2);
     const mix = clip(0.65 * flee + 0.35 * sep + 0.55 * wallTurn, -1, 1);
     return { sep, ali: 0, coh: 0, role: flee, mix };
   }

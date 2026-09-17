@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-ARENA = 1.0
+ARENA = 2.0
 DT = 0.05
 MAX_STEPS = 2400
 MIN_STEPS = 200
@@ -263,9 +263,10 @@ class World:
             else:
                 role = ROLE_FFA
             angle = (2.0 * np.pi * i) / n - np.pi / 2
-            radius = 0.32 if n > 2 else 0.28
-            x = float(np.clip(0.5 + radius * np.cos(angle) + jitter(), 0.08, 0.92))
-            y = float(np.clip(0.5 + radius * np.sin(angle) + jitter(), 0.08, 0.92))
+            mid = ARENA / 2
+            radius = (0.32 if n > 2 else 0.28) * ARENA
+            x = float(np.clip(mid + radius * np.cos(angle) + jitter() * ARENA, 0.08 * ARENA, 0.92 * ARENA))
+            y = float(np.clip(mid + radius * np.sin(angle) + jitter() * ARENA, 0.08 * ARENA, 0.92 * ARENA))
             heading = float(wrap_angle(angle + np.pi + self.rng.uniform(-0.25, 0.25)))
             self.planes.append(Plane(name, i, x, y, heading, brain_id=brain_id, role=role))
         self.bullets = []
@@ -339,8 +340,8 @@ class World:
         if focus is not None and _can_see(me, focus):
             out[0:4] = _relative_plane(me, focus)
         out[4:10] = (
-            (me.x - 0.5) * 2,
-            (me.y - 0.5) * 2,
+            (me.x / ARENA - 0.5) * 2,
+            (me.y / ARENA - 0.5) * 2,
             np.cos(me.heading),
             np.sin(me.heading),
             _ray_to_wall(me.x, me.y, me.heading),
@@ -642,7 +643,7 @@ def _relative_plane(me: Plane, you: Plane) -> tuple[float, float, float, float]:
     c, s = np.cos(me.heading), np.sin(me.heading)
     fwd = dx * c + dy * s
     right = -dx * s + dy * c
-    rng = float(np.hypot(dx, dy)) / np.sqrt(2.0)
+    rng = float(np.hypot(dx, dy)) / (ARENA * np.sqrt(2.0))
     rel_h = wrap_angle(you.heading - me.heading) / np.pi
     return float(fwd), float(right), rng, rel_h
 

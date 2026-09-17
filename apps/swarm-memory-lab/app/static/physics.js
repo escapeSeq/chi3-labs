@@ -1,6 +1,6 @@
 import { clip, uniform } from "./rng.js";
 
-export const ARENA = 1.0;
+export const ARENA = 2.0;
 export const DT = 0.05;
 export const MAX_STEPS = 2400;
 export const MIN_STEPS = 200;
@@ -242,9 +242,10 @@ export class World {
         role = ROLE_FFA;
       }
       const angle = (2 * Math.PI * i) / n - Math.PI / 2;
-      const radius = n > 2 ? 0.32 : 0.28;
-      const x = clip(0.5 + radius * Math.cos(angle) + uniform(this.rng, -0.03, 0.03), 0.08, 0.92);
-      const y = clip(0.5 + radius * Math.sin(angle) + uniform(this.rng, -0.03, 0.03), 0.08, 0.92);
+      const mid = ARENA / 2;
+      const radius = (n > 2 ? 0.32 : 0.28) * ARENA;
+      const x = clip(mid + radius * Math.cos(angle) + uniform(this.rng, -0.03, 0.03) * ARENA, 0.08 * ARENA, 0.92 * ARENA);
+      const y = clip(mid + radius * Math.sin(angle) + uniform(this.rng, -0.03, 0.03) * ARENA, 0.08 * ARENA, 0.92 * ARENA);
       const heading = wrapAngle(angle + Math.PI + uniform(this.rng, -0.25, 0.25));
       this.planes.push(new Plane(name, i, x, y, heading, brainId, role));
     }
@@ -326,8 +327,8 @@ export class World {
       out[2] = rel[2];
       out[3] = rel[3];
     }
-    out[4] = (me.x - 0.5) * 2;
-    out[5] = (me.y - 0.5) * 2;
+    out[4] = (me.x / ARENA - 0.5) * 2;
+    out[5] = (me.y / ARENA - 0.5) * 2;
     out[6] = Math.cos(me.heading);
     out[7] = Math.sin(me.heading);
     out[8] = rayToWall(me.x, me.y, me.heading);
@@ -648,7 +649,7 @@ function relativePlane(me, you) {
   const s = Math.sin(me.heading);
   const fwd = dx * c + dy * s;
   const right = -dx * s + dy * c;
-  const rng = Math.hypot(dx, dy) / Math.sqrt(2);
+  const rng = Math.hypot(dx, dy) / (ARENA * Math.sqrt(2));
   const relH = wrapAngle(you.heading - me.heading) / Math.PI;
   return [fwd, right, rng, relH];
 }
