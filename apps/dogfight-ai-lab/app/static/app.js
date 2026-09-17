@@ -3,6 +3,13 @@ function text(id, value) {
   const el = $(id);
   if (el) el.textContent = value;
 }
+
+async function liveJSON(url, opts = {}) {
+  const sep = url.includes("?") ? "&" : "?";
+  const res = await fetch(`${url}${sep}t=${Date.now()}`, { cache: "no-store", ...opts });
+  const body = await res.json().catch(() => ({}));
+  return { res, body };
+}
 const PALETTE = ["#e85d4c", "#3db8c5", "#e6c36a", "#7c6bff", "#5dce8a", "#e07ab5", "#f08a4b", "#8aa09a", "#6ec6ff"];
 const state = {
   timer: null,
@@ -778,14 +785,14 @@ function startBurstPoll() {
 
 async function pollBurst() {
   try {
-    const burst = await (await fetch("api/burst")).json();
+    const { body: burst } = await liveJSON("api/burst");
     const trained = Number(burst.trained || 0);
     const mark = burstMilestone(trained);
     if (mark >= BURST_REPORT && mark !== state.burstShown) {
       state.burstShown = mark;
       text("burst-read", `Burst training · ${mark.toLocaleString()} sorties`);
       $("status").textContent = `Burst training running · ${mark.toLocaleString()} sorties.`;
-      const snap = await (await fetch("api/state")).json();
+      const { body: snap } = await liveJSON("api/state");
       applyStatus(snap);
     } else if (!state.burstShown) {
       text("burst-read", "Burst training · 0 sorties");
@@ -830,16 +837,21 @@ async function startBurst() {
   text("burst-read", "Burst training · 0 sorties");
   $("status").textContent = "Burst training started. Counter updates every 10,000 sorties.";
   try {
-    const res = await fetch("api/burst/start", {
+    const { res, body } = await liveJSON("api/burst/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ lr: 0.018, seconds: timeoutSeconds() }),
     });
-    const body = await res.json();
     if (!res.ok) throw new Error(body.detail || "Burst start failed");
-    applyStatus(body);
     startBurstPoll();
   } catch (err) {
+    try {
+      const { body } = await liveJSON("api/burst");
+      if (body.running === true) {
+        startBurstPoll();
+        return;
+      }
+    } catch (_) {}
     setBurstControls(false);
     $("status").textContent = err.message;
     resumeFlights();
@@ -851,10 +863,9 @@ async function stopBurst() {
   if (btn) btn.disabled = true;
   $("status").textContent = "Stopping burst after the current sortie…";
   try {
-    const res = await fetch("api/burst/stop", { method: "POST" });
-    const body = await res.json();
+    const { res, body } = await liveJSON("api/burst/stop", { method: "POST" });
     if (!res.ok) throw new Error(body.detail || "Burst stop failed");
-    if (!body.running) {
+    if (body.running === false) {
       stopBurstPoll();
       applyStatus(body);
       finishBurst(body);

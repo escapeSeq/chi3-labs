@@ -243,13 +243,13 @@ def burst_start(body: Optional[BurstIn] = None) -> dict:
     if body.seconds is not None:
         ACADEMY.set_max_steps(physics.steps_from_seconds(body.seconds), persist=False)
     burst = ACADEMY.start_burst(lr=body.lr)
-    return {**burst, **_status()}
+    return {**burst, "burst": burst}
 
 
 @app.post("/api/burst/stop")
 def burst_stop() -> dict:
     burst = ACADEMY.stop_burst()
-    return {**burst, **_status()}
+    return {**burst, "burst": burst}
 
 
 @app.post("/api/watch")
@@ -274,7 +274,7 @@ async def sortie() -> Response:
 async def no_store_ui(request, call_next):
     response = await call_next(request)
     path = request.url.path
-    if path == "/" or path.startswith("/static/"):
+    if path == "/" or path.startswith("/static/") or path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
     return response
 

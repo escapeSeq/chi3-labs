@@ -4,6 +4,13 @@ function text(id, value) {
   if (el) el.textContent = value;
 }
 
+async function liveJSON(url, opts = {}) {
+  const sep = url.includes("?") ? "&" : "?";
+  const res = await fetch(`${url}${sep}t=${Date.now()}`, { cache: "no-store", ...opts });
+  const body = await res.json().catch(() => ({}));
+  return { res, body };
+}
+
 const PALETTE = ["#e85d4c", "#3db8c5", "#e6c36a", "#7c6bff", "#5dce8a", "#e07ab5", "#f08a4b", "#8aa09a"];
 const PREY_MIN = 1;
 const HIVE_MIN = 1;
@@ -454,7 +461,7 @@ function startBurstPoll() {
   stopBurstPoll();
   state.burstTimer = setInterval(async () => {
     try {
-      const burst = await (await fetch("api/burst")).json();
+      const { body: burst } = await liveJSON("api/burst");
       const shown = burstMilestone(burst.trained);
       if (shown !== state.burstShown) {
         state.burstShown = shown;
@@ -463,7 +470,7 @@ function startBurstPoll() {
       if (burst.running === false) {
         stopBurstPoll();
         setBurstControls(false);
-        const snap = await (await fetch("api/state")).json();
+        const { body: snap } = await liveJSON("api/state");
         applyStatus(snap);
         $("status").textContent = burst.error ? `Burst stopped: ${burst.error}` : "Burst training stopped.";
         resumeFlights();
@@ -484,7 +491,11 @@ function stopBurstPoll() {
 $("burst").addEventListener("click", async () => {
   try {
     if (state.bursting) {
-      const body = await pushJson("api/burst/stop", {});
+      const { body } = await liveJSON("api/burst/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
       applyStatus(body);
       setBurstControls(false);
       stopBurstPoll();
@@ -492,14 +503,25 @@ $("burst").addEventListener("click", async () => {
       return;
     }
     pauseFlights();
-    const body = await pushJson("api/burst/start", {});
-    applyStatus(body);
     setBurstControls(true);
     state.burstShown = 0;
     text("burst-read", "Burst training · 0 sorties");
     $("status").textContent = "Burst training. Counter updates every 10,000 sorties.";
+    try {
+      const { res, body } = await liveJSON("api/burst/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!res.ok) throw new Error(body.detail || "Burst start failed");
+    } catch (err) {
+      const { body } = await liveJSON("api/burst");
+      if (body.running !== true) throw err;
+    }
     startBurstPoll();
   } catch (err) {
+    setBurstControls(false);
+    resumeFlights();
     $("status").textContent = err.message;
   }
 });

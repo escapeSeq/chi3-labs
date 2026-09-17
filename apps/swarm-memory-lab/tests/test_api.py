@@ -32,13 +32,14 @@ def test_health_and_index():
     assert 'id="prey-plus"' in page.text
     assert 'id="hive-plus"' in page.text
     assert 'href="static/styles.css?v=swarm5"' in page.text
-    assert 'src="static/app.js?v=swarm6"' in page.text
+    assert 'src="static/app.js?v=swarm7"' in page.text
     js = client.get("/static/app.js")
     assert js.status_code == 200
     assert "api/share" in js.text
     assert "api/reset-brain" in js.text
     assert "api/prey" in js.text
     assert "burst.running === false" in js.text
+    assert 'cache: "no-store"' in js.text
     assert page.headers.get("cache-control") == "no-store"
 
 
@@ -81,9 +82,30 @@ def test_lesson_and_watch():
 def test_burst_start_and_stop():
     started = client.post("/api/burst/start", json={}).json()
     assert started["running"] is True
+    assert started["burst"]["running"] is True
     stopped = client.post("/api/burst/stop").json()
     assert "burst" in stopped
     ACADEMY.stop_burst(join=True)
+
+
+def test_burst_start_does_not_block_on_status(monkeypatch):
+    import time
+
+    from app import main as main_mod
+
+    def slow_status() -> dict:
+        time.sleep(3)
+        return {"empty": True}
+
+    monkeypatch.setattr(main_mod, "_status", slow_status)
+    t0 = time.time()
+    started = client.post("/api/burst/start", json={}).json()
+    elapsed = time.time() - t0
+    ACADEMY.stop_burst(join=True)
+    assert started["running"] is True
+    assert started["burst"]["running"] is True
+    assert elapsed < 1.5
+    assert client.get("/api/burst").headers.get("cache-control") == "no-store"
 
 
 def test_reset_memory_clears_map():

@@ -30,13 +30,14 @@ def test_health_and_index():
     assert 'id="winner-read"' in page.text
     assert "red-kills" not in page.text
     assert 'href="static/styles.css?v=draw-loss"' in page.text
-    assert 'src="static/app.js?v=burst-keep"' in page.text
+    assert 'src="static/app.js?v=burst-live"' in page.text
     js = client.get("/static/app.js")
     assert js.status_code == 200
     assert "red-kills" not in js.text
     assert "winner-read" in js.text
     assert "timeout loss" in js.text
     assert "burst.running === false" in js.text
+    assert 'cache: "no-store"' in js.text
     assert page.headers.get("cache-control") == "no-store"
     assert "Numbers" in page.text
     assert "/data" in page.text
@@ -100,6 +101,27 @@ def test_burst_start_and_stop():
     assert final["running"] is False
     assert final["trained"] >= 1
     assert client.get("/api/state").json()["score"]["episodes"] >= 1
+    ACADEMY.stop_burst(join=True)
+
+
+def test_burst_start_does_not_block_on_status(monkeypatch):
+    import time
+
+    from app import main as main_mod
+
+    def slow_status() -> dict:
+        time.sleep(3)
+        return {"empty": True}
+
+    monkeypatch.setattr(main_mod, "_status", slow_status)
+    t0 = time.time()
+    started = client.post("/api/burst/start", json={}).json()
+    elapsed = time.time() - t0
+    ACADEMY.stop_burst(join=True)
+    assert started["running"] is True
+    assert started["burst"]["running"] is True
+    assert elapsed < 1.5
+    assert client.get("/api/burst").headers.get("cache-control") == "no-store"
 
 
 def test_burst_default_is_one_million():

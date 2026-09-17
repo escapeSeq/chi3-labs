@@ -217,6 +217,7 @@ class Academy:
         self.burst_running = False
         self.burst_trained = 0
         self.burst_error: str | None = None
+        self.burst_lr = 0.014
         self.stats_gen = 0
         self.restore()
 
@@ -415,6 +416,9 @@ class Academy:
                         "swarm_gain": self.swarm_gain,
                         "memory_gain": self.memory_gain,
                         "memory_on": self.memory_on,
+                        "burst_wanted": bool(self.burst_running),
+                        "burst_lr": float(getattr(self, "burst_lr", 0.014)),
+                        "burst_trained": int(self.burst_trained),
                         "scores": {key: board.as_dict() for key, board in self.scores.items()},
                         "curves": {key: _jsonable(rows[-CURVE_KEEP:]) for key, rows in self.curves.items()},
                     }
@@ -499,6 +503,8 @@ class Academy:
             if self._cancel_play.is_set():
                 aborted = True
                 break
+            if world.steps % 16 == 0:
+                time.sleep(0)
             world.extra_turns = extra_turns(world)
             if self.uses_memory():
                 by_name = {plane.name: plane for plane in world.planes}
@@ -622,14 +628,16 @@ class Academy:
     def burst_status(self) -> dict:
         return {"running": bool(self.burst_running), "trained": int(self.burst_trained), "error": self.burst_error}
 
-    def start_burst(self, lr: float = 0.014) -> dict:
+    def start_burst(self, lr: float = 0.014, resume: bool = False) -> dict:
         if self.burst_running:
             return self.burst_status()
         self._burst_gen += 1
         gen = self._burst_gen
+        self.burst_lr = float(lr)
         self._burst_stop.clear()
         self.burst_running = True
-        self.burst_trained = 0
+        if not resume:
+            self.burst_trained = 0
         self.burst_error = None
         self._burst_thread = threading.Thread(target=self._run_burst, args=(float(lr), gen), daemon=True)
         self._burst_thread.start()
@@ -637,6 +645,7 @@ class Academy:
 
     def stop_burst(self, join: bool = False) -> dict:
         self._burst_stop.set()
+        self.interrupt_play()
         if join:
             thread = self._burst_thread
             if thread is not None and thread.is_alive():
@@ -646,15 +655,19 @@ class Academy:
         return self.burst_status()
 
     def _run_burst(self, lr: float, gen: int) -> None:
-        misses = 0
         try:
+            try:
+                self.persist()
+            except Exception:
+                pass
             while not self._burst_stop.is_set() and gen == self._burst_gen:
                 try:
                     self.play(learn=True, lr=lr, persist=False, trace=False)
                     if gen != self._burst_gen:
                         return
+                    if self._burst_stop.is_set():
+                        break
                     self.burst_trained += 1
-                    misses = 0
                     if self.burst_trained % SAVE_EVERY == 0:
                         try:
                             self.persist()
@@ -662,18 +675,16 @@ class Academy:
                             self.burst_error = f"save failed: {exc}"
                 except Exception as exc:
                     self.burst_error = str(exc)
-                    misses += 1
-                    if misses >= 12:
-                        break
                     time.sleep(0.05)
+                time.sleep(0)
         finally:
             if gen != self._burst_gen:
                 return
+            self.burst_running = False
             try:
                 self.persist()
             except Exception:
                 pass
-            self.burst_running = False
 
 
 def _brain_label(brain_id: str | None) -> str:
