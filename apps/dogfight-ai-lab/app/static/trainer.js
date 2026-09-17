@@ -87,8 +87,8 @@ export class Scoreboard {
         const name = event.slice(0, -5);
         const bid = nameToBrain[name] || name;
         this.kills[bid] = (this.kills[bid] || 0) + 1;
-      } else if (event.endsWith("_wall")) {
-        const name = event.slice(0, -5);
+      } else if (event.endsWith("_wall") || event.endsWith("_circle")) {
+        const name = event.slice(0, event.lastIndexOf("_"));
         const bid = nameToBrain[name] || name;
         this.walls[bid] = (this.walls[bid] || 0) + 1;
       } else if (event.startsWith("win_") && mode !== MODE_HUNT) {
@@ -130,7 +130,7 @@ export class Scoreboard {
     } else if (events.includes("prey_down")) {
       this.hunts += 1;
       if (events.includes("clean_hunt")) this.last_outcome = "clean_hunt";
-      else if (events.some((e) => e.endsWith("_wall") && e.startsWith(preyName))) this.last_outcome = "prey_crash";
+      else if (events.some((e) => (e.endsWith("_wall") || e.endsWith("_circle")) && e.startsWith(preyName))) this.last_outcome = "prey_crash";
       else if (events.includes("midair")) this.last_outcome = "midair";
       else this.last_outcome = "hunt";
       if (this.last_outcome === "clean_hunt") this.clean_hunts += 1;

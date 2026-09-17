@@ -4,7 +4,8 @@ Each plane is a Dubins-style vehicle: constant speed, yaw rate capped by
 speed / turn_radius. The gun is bolted to the nose — bullets inherit heading
 and never steer. Every other living plane is a target. The sortie ends when
 one plane remains, or the clock runs out. A timeout with more than one
-plane still up is a draw, scored as a loss for every survivor.
+plane still up is a draw, scored as a loss for every survivor. Net yaw of a
+full circle (2π) is the same kind of crash as flying into a wall.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ BULLET_LIFE = 0.46
 HIT_R = 0.028
 COOLDOWN = 0.65
 GUN_RANGE = BULLET_SPEED * BULLET_LIFE
+CIRCLE_SPIN = 2.0 * np.pi
 MIN_PLANES = 2
 MAX_PLANES = 9
 OTHER_SLOTS = MAX_PLANES - 1
@@ -111,6 +113,7 @@ class Plane:
     brain_id: str = ""
     role: str = "ffa"
     cooldown: float = 0.0
+    spin: float = 0.0
     alive: bool = True
 
     def pose(self) -> dict:
@@ -123,6 +126,7 @@ class Plane:
             "y": self.y,
             "heading": self.heading,
             "cooldown": self.cooldown,
+            "spin": self.spin,
             "alive": self.alive,
         }
 
@@ -224,7 +228,7 @@ class World:
                 self._act(plane, int(actions.get(plane.name, 1)), rewards)
         self._integrate_planes()
         self._integrate_bullets()
-        self._walls(rewards)
+        self._crashes(rewards)
         self._midair(rewards)
         self._hits(rewards)
         self._shaping(rewards)
@@ -305,7 +309,9 @@ class World:
         action = int(np.clip(action, 0, 5))
         turn = (action % 3) - 1
         fire = action >= 3
-        plane.heading = wrap_angle(plane.heading + turn * max_yaw_rate() * DT)
+        yaw = turn * max_yaw_rate() * DT
+        plane.heading = wrap_angle(plane.heading + yaw)
+        plane.spin += yaw
         plane.cooldown = max(0.0, plane.cooldown - DT)
         if fire:
             if plane.cooldown > 1e-9:
@@ -331,20 +337,27 @@ class World:
                 live.append(b)
         self.bullets = live
 
-    def _walls(self, rewards: dict[str, float]) -> None:
+    def _crashes(self, rewards: dict[str, float]) -> None:
         for p in self.planes:
-            if p.alive and (p.x <= 0.0 or p.x >= ARENA or p.y <= 0.0 or p.y >= ARENA):
-                p.alive = False
-                self.events.append(f"{p.name}_wall")
-                if self.mode == MODE_HUNT:
-                    self._hunt_loss(p, rewards, wall=True)
-                else:
-                    rewards[p.name] -= 1.0
-                    others = self.living()
-                    if others:
-                        bonus = 0.35 / len(others)
-                        for q in others:
-                            rewards[q.name] += bonus
+            if not p.alive:
+                continue
+            if p.x <= 0.0 or p.x >= ARENA or p.y <= 0.0 or p.y >= ARENA:
+                self._crash(p, rewards, "wall")
+            elif abs(p.spin) >= CIRCLE_SPIN:
+                self._crash(p, rewards, "circle")
+
+    def _crash(self, plane: Plane, rewards: dict[str, float], kind: str) -> None:
+        plane.alive = False
+        self.events.append(f"{plane.name}_{kind}")
+        if self.mode == MODE_HUNT:
+            self._hunt_loss(plane, rewards, wall=True)
+            return
+        rewards[plane.name] -= 1.0
+        others = self.living()
+        if others:
+            bonus = 0.35 / len(others)
+            for q in others:
+                rewards[q.name] += bonus
 
     def _midair(self, rewards: dict[str, float]) -> None:
         live = self.living()

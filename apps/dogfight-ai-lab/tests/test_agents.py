@@ -178,6 +178,14 @@ def test_draw_is_scored_as_failure():
         assert stats["return"] < -0.8
 
 
+def test_circle_crash_counts_as_wall():
+    board = Scoreboard()
+    board.note(["p1_circle", "win_p2"], {"p1": "ace", "p2": "rookie"})
+    assert board.walls == {"ace": 1}
+    assert board.wins == {"rookie": 1}
+    assert board.last_winner == "rookie"
+
+
 def test_frozen_brain_does_not_learn():
     academy = Academy(np.random.default_rng(4))
     academy.brains["p1"].learn = False

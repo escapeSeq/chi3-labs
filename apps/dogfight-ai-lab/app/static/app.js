@@ -1,6 +1,6 @@
 import { createAcademyClient } from "./client.js";
 
-const academy = createAcademyClient(new URL("./academy-worker.js", import.meta.url));
+const academy = createAcademyClient(new URL("./academy-worker.js?v=circle-death", import.meta.url));
 
 const $ = (id) => document.getElementById(id);
 function text(id, value) {
@@ -237,7 +237,9 @@ function ffaOutcomeCopy() {
 
 function formatEvent(event) {
   if (event === "draw") return "timeout loss";
-  return String(event || "").replaceAll("_", " ");
+  const text = String(event || "");
+  if (text.endsWith("_circle")) return `${text.slice(0, -7)} circled out`;
+  return text.replaceAll("_", " ");
 }
 
 function formatEvents(events) {
@@ -258,7 +260,7 @@ function syncFightCopy(n) {
     "field-hint",
     hunt
       ? "One against the pack. P1 is chased. The fight ends when that plane dies, the pack is wiped, or time runs out."
-      : `Free-for-all, ${v} aircraft. Last plane left wins. Timeout with more than one still up is a loss. Out of bounds is a crash.`
+      : `Free-for-all, ${v} aircraft. Last plane left wins. Timeout with more than one still up is a loss. Out of bounds or a full circle is a crash.`
   );
   text("winner-label", hunt ? "Last outcome" : "Last winner");
   text("draw-label", hunt ? "Escapes · hunts" : "Timeout losses · midairs");
@@ -900,7 +902,7 @@ function applyStatus(body) {
         "lesson-note",
         fightMode() === "hunt"
           ? "Stay alive. Every hunter you take down helps. Dying ends the sortie."
-          : "Survive. Point the nose. A crash is usually the wall."
+          : "Survive. Point the nose. A full circle is a crash, same as the wall."
       );
     }
   }
@@ -1245,6 +1247,17 @@ function drawPlane(ctx, p, color) {
     const left = p.heading + Math.PI / 2;
     const right = p.heading - Math.PI / 2;
     for (const side of [left, right]) {
+      ctx.beginPath();
+      ctx.arc(xy(p.x + r * Math.cos(side)), xy(p.y + r * Math.sin(side)), r * (field.width - 56), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    const spin = Number(p.spin) || 0;
+    const spinFrac = Math.min(1, Math.abs(spin) / (Math.PI * 2));
+    if (spinFrac > 0.02) {
+      const side = spin < 0 ? left : right;
+      ctx.globalAlpha = 0.22 + 0.55 * spinFrac;
+      ctx.lineWidth = 1.5 + 2 * spinFrac;
+      ctx.strokeStyle = spinFrac > 0.75 ? "#e85d4c" : color;
       ctx.beginPath();
       ctx.arc(xy(p.x + r * Math.cos(side)), xy(p.y + r * Math.sin(side)), r * (field.width - 56), 0, Math.PI * 2);
       ctx.stroke();

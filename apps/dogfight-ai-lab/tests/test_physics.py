@@ -39,6 +39,47 @@ def test_wall_crash():
     assert any(e.endswith("_wall") for e in w.events)
 
 
+def test_full_circle_is_instant_death():
+    from app.physics import CIRCLE_SPIN, DT
+
+    w = World(np.random.default_rng(8), max_steps=80)
+    w.red.x, w.red.y, w.red.heading, w.red.spin = 0.35, 0.5, 0.0, 0.0
+    w.blue.x, w.blue.y, w.blue.heading, w.blue.spin = 0.65, 0.5, np.pi, 0.0
+    yaw = max_yaw_rate() * DT
+    steps_needed = int(np.ceil(CIRCLE_SPIN / yaw))
+    for _ in range(steps_needed - 1):
+        w.blue.x, w.blue.y = 0.65, 0.5
+        w.step(0, 1)
+        assert w.red.alive
+        assert abs(w.red.spin) < CIRCLE_SPIN
+    w.blue.x, w.blue.y = 0.65, 0.5
+    w.step(0, 1)
+    assert not w.red.alive
+    assert any(e.endswith("_circle") for e in w.events)
+    assert f"win_{w.blue.name}" in w.events
+
+
+def test_opposite_turn_unwinds_circle():
+    from app.physics import CIRCLE_SPIN, DT
+
+    w = World(np.random.default_rng(9), max_steps=80)
+    w.red.x, w.red.y, w.red.heading, w.red.spin = 0.5, 0.5, 0.0, 0.0
+    w.blue.x, w.blue.y, w.blue.heading, w.blue.spin = 0.75, 0.5, np.pi, 0.0
+    yaw = max_yaw_rate() * DT
+    hold = int(np.ceil(CIRCLE_SPIN / yaw))
+    for _ in range(hold):
+        w.red.x, w.red.y = 0.5, 0.5
+        w.blue.x, w.blue.y = 0.75, 0.5
+        w.step(0, 1)
+        assert w.red.alive
+        w.red.x, w.red.y = 0.5, 0.5
+        w.blue.x, w.blue.y = 0.75, 0.5
+        w.step(2, 1)
+        assert w.red.alive
+    assert abs(w.red.spin) < yaw * 1.5
+    assert not any(e.endswith("_circle") for e in w.events)
+
+
 def test_custom_timeout_draws():
     w = World(np.random.default_rng(0), max_steps=4)
     w.red.x, w.red.y, w.red.heading = 0.4, 0.4, 0.0

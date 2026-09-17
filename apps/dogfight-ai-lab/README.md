@@ -33,14 +33,15 @@ uvicorn app.main:app --host 0.0.0.0 --port 8082
 
 - A Dubins / constant-speed plane cannot change heading faster than
   speed ÷ turn radius. The dashed circles on the plot are the only legal
-  paths.
+  paths. Net yaw of a full circle is a crash, same as the wall.
 - The gun is welded to the nose. Kills are geometry, not turrets.
 - Each seat starts with its own softmax net. Share a brain only when you
   want identical tactics. If one copy should learn and another should stay
   put, **revise**: the child starts from the parent's weights and keeps
   training.
 - A sortie ends when one aircraft remains. A timeout with more than one
-  plane still up is a draw, scored as a loss and a failure.
+  plane still up is a draw, scored as a loss and a failure. A full circle
+  is a crash.
 
 Flights run continuously in the browser. Use **Train this burst** to
 fast-forward sorties (default 100, up to 1,000,000). Use **Sortie timeout**

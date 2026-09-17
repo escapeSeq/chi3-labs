@@ -33,10 +33,10 @@
         Each plane is a Dubins vehicle: yaw is capped by speed ÷ turn radius,
         and the gun is welded to the nose. Everyone shoots everyone. A sortie
         ends when one aircraft remains, or the clock runs out — a timeout with
-        more than one plane still up is a loss for every survivor. Each seat starts
-        with its own brain. Share a brain only if you choose to. Revise a seat
-        to store the current net in the library and keep learning on a copy.
-        Weights stay in this browser.
+        more than one plane still up is a loss for every survivor. A full circle
+        is instant death. Each seat starts with its own brain. Share a brain
+        only if you choose to. Revise a seat to store the current net in the
+        library and keep learning on a copy. Weights stay in this browser.
       </p>
     </header>
 
@@ -106,7 +106,7 @@
         <h3>Learning</h3>
         <canvas id="chart" width="420" height="180"></canvas>
         <blockquote id="lesson-note">
-          Survive. Point the nose. A crash is usually the wall.
+          Survive. Point the nose. A full circle is a crash, same as the wall.
         </blockquote>
       </aside>
     </main>
@@ -175,14 +175,16 @@
           Instant heading changes would make this a pointing contest. A tight
           radius means every shot is bought with a curve. The dashed circles
           on the field are the only paths the plane is allowed to follow.
+          Hold a turn through a full circle and you crash; the ring on that
+          side flares as net yaw builds. Opposite bank unwinds it.
         </p>
       </article>
       <article>
         <h2>Last plane standing</h2>
         <p>
-          There are no teams. A kill, a wall, or a mid-air takes you out. The
-          fight continues until one aircraft is left. Timeout with more than one
-          plane still up is a draw, counted as a loss and a failure.
+          There are no teams. A kill, a wall, a full circle, or a mid-air takes
+          you out. The fight continues until one aircraft is left. Timeout with
+          more than one plane still up is a draw, counted as a loss and a failure.
         </p>
       </article>
       <article>
@@ -210,6 +212,6 @@
     <footer>
       <p>Chi3-labs</p>
     </footer>
-    <script src="static/app.js?v=client-academy" type="module"></script>
+    <script src="static/app.js?v=circle-death" type="module"></script>
   </body>
 </html>

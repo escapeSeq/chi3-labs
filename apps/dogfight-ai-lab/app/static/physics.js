@@ -13,6 +13,7 @@ export const BULLET_LIFE = 0.46;
 export const HIT_R = 0.028;
 export const COOLDOWN = 0.65;
 export const GUN_RANGE = BULLET_SPEED * BULLET_LIFE;
+export const CIRCLE_SPIN = 2 * Math.PI;
 export const MIN_PLANES = 2;
 export const MAX_PLANES = 9;
 export const OTHER_SLOTS = MAX_PLANES - 1;
@@ -83,6 +84,7 @@ export class Plane {
     this.brain_id = brainId || name;
     this.role = role || "ffa";
     this.cooldown = 0;
+    this.spin = 0;
     this.alive = true;
   }
 
@@ -96,6 +98,7 @@ export class Plane {
       y: this.y,
       heading: this.heading,
       cooldown: this.cooldown,
+      spin: this.spin,
       alive: this.alive,
     };
   }
@@ -190,7 +193,7 @@ export class World {
     }
     this._integratePlanes();
     this._integrateBullets();
-    this._walls(rewards);
+    this._crashes(rewards);
     this._midair(rewards);
     this._hits(rewards);
     this._shaping(rewards);
@@ -285,7 +288,9 @@ export class World {
     action = clip(action | 0, 0, 5);
     const turn = (action % 3) - 1;
     const fire = action >= 3;
-    plane.heading = wrapAngle(plane.heading + turn * maxYawRate() * DT);
+    const yaw = turn * maxYawRate() * DT;
+    plane.heading = wrapAngle(plane.heading + yaw);
+    plane.spin += yaw;
     plane.cooldown = Math.max(0, plane.cooldown - DT);
     if (fire) {
       if (plane.cooldown > 1e-9) rewards[plane.name] -= 0.01;
@@ -315,21 +320,26 @@ export class World {
     this.bullets = live;
   }
 
-  _walls(rewards) {
+  _crashes(rewards) {
     for (const p of this.planes) {
-      if (p.alive && (p.x <= 0 || p.x >= ARENA || p.y <= 0 || p.y >= ARENA)) {
-        p.alive = false;
-        this.events.push(`${p.name}_wall`);
-        if (this.mode === MODE_HUNT) this._huntLoss(p, rewards, true);
-        else {
-          rewards[p.name] -= 1;
-          const others = this.living();
-          if (others.length) {
-            const bonus = 0.35 / others.length;
-            for (const q of others) rewards[q.name] += bonus;
-          }
-        }
-      }
+      if (!p.alive) continue;
+      if (p.x <= 0 || p.x >= ARENA || p.y <= 0 || p.y >= ARENA) this._crash(p, rewards, "wall");
+      else if (Math.abs(p.spin) >= CIRCLE_SPIN) this._crash(p, rewards, "circle");
+    }
+  }
+
+  _crash(plane, rewards, kind) {
+    plane.alive = false;
+    this.events.push(`${plane.name}_${kind}`);
+    if (this.mode === MODE_HUNT) {
+      this._huntLoss(plane, rewards, true);
+      return;
+    }
+    rewards[plane.name] -= 1;
+    const others = this.living();
+    if (others.length) {
+      const bonus = 0.35 / others.length;
+      for (const q of others) rewards[q.name] += bonus;
     }
   }
 

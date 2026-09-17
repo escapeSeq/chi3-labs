@@ -116,8 +116,8 @@ class Scoreboard:
                 name = event[: -len("_kill")]
                 bid = name_to_brain.get(name, name)
                 self.kills[bid] = self.kills.get(bid, 0) + 1
-            elif event.endswith("_wall"):
-                name = event[: -len("_wall")]
+            elif event.endswith("_wall") or event.endswith("_circle"):
+                name = event.rsplit("_", 1)[0]
                 bid = name_to_brain.get(name, name)
                 self.walls[bid] = self.walls.get(bid, 0) + 1
             elif event.startswith("win_") and mode != MODE_HUNT:
@@ -158,7 +158,7 @@ class Scoreboard:
             if "clean_hunt" in events:
                 self.clean_hunts += 1
                 self.last_outcome = "clean_hunt"
-            elif any(event.endswith("_wall") and event.startswith(prey_name) for event in events):
+            elif any((event.endswith("_wall") or event.endswith("_circle")) and event.startswith(prey_name) for event in events):
                 self.last_outcome = "prey_crash"
             elif "midair" in events:
                 self.last_outcome = "midair"
@@ -1010,8 +1010,8 @@ def _narrate(rows: list[dict], score: Scoreboard, brains: dict[str, BrainSlot], 
         return "No sorties yet."
     first = rows[: max(1, len(rows) // 5)]
     last = rows[-max(1, len(rows) // 5) :]
-    crash0 = np.mean([any("wall" in e or e == "midair" for e in r["events"]) for r in first])
-    crash1 = np.mean([any("wall" in e or e == "midair" for e in r["events"]) for r in last])
+    crash0 = np.mean([any("wall" in e or "circle" in e or e == "midair" for e in r["events"]) for r in first])
+    crash1 = np.mean([any("wall" in e or "circle" in e or e == "midair" for e in r["events"]) for r in last])
     life0 = np.mean([r["steps"] for r in first])
     life1 = np.mean([r["steps"] for r in last])
     if mode == MODE_HUNT:

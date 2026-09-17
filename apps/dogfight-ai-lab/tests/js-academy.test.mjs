@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Policy } from "../app/static/agents.js";
-import { MODE_HUNT, World } from "../app/static/physics.js";
+import { CIRCLE_SPIN, DT, MODE_HUNT, SPEED, TURN_RADIUS, World } from "../app/static/physics.js";
 import { mulberry32 } from "../app/static/rng.js";
 import { Academy } from "../app/static/trainer.js";
 
@@ -30,6 +30,32 @@ describe("dogfight client academy", () => {
     const world = new World(rng, { maxSteps: 8, nPlanes: 2 });
     while (!world.done()) world.step({ p1: 1, p2: 1 });
     assert.ok(world.events.includes("draw") || world.living().length <= 1);
+  });
+
+  it("a full circle is instant death", () => {
+    const world = new World(mulberry32(8), { maxSteps: 80, nPlanes: 2 });
+    world.red.x = 0.35;
+    world.red.y = 0.5;
+    world.red.heading = 0;
+    world.red.spin = 0;
+    world.blue.x = 0.65;
+    world.blue.y = 0.5;
+    world.blue.heading = Math.PI;
+    world.blue.spin = 0;
+    const yaw = (SPEED / TURN_RADIUS) * DT;
+    const stepsNeeded = Math.ceil(CIRCLE_SPIN / yaw);
+    for (let i = 0; i < stepsNeeded - 1; i++) {
+      world.blue.x = 0.65;
+      world.blue.y = 0.5;
+      world.step({ p1: 0, p2: 1 });
+      assert.equal(world.red.alive, true);
+    }
+    world.blue.x = 0.65;
+    world.blue.y = 0.5;
+    world.step({ p1: 0, p2: 1 });
+    assert.equal(world.red.alive, false);
+    assert.ok(world.events.some((e) => e.endsWith("_circle")));
+    assert.ok(world.events.includes("win_p2"));
   });
 
   it("hunt names P1 as prey", () => {

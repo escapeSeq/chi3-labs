@@ -20,7 +20,7 @@ def test_health_and_index():
     assert 'id="winner-read"' in page.text
     assert "red-kills" not in page.text
     assert 'href="static/styles.css?v=draw-loss"' in page.text
-    assert 'src="static/app.js?v=client-academy"' in page.text
+    assert 'src="static/app.js?v=circle-death"' in page.text
     js = client.get("/static/app.js")
     assert js.status_code == 200
     assert "createAcademyClient" in js.text
@@ -31,6 +31,7 @@ def test_health_and_index():
     assert "loss if more than one is still up" in page.text
     assert "Planes in the fight" in page.text
     assert "Last plane standing" in page.text
+    assert "full circle" in page.text
     assert "One against the pack" in page.text
     assert 'id="mode"' in page.text
     for name in ("physics.js", "agents.js", "trainer.js", "academy-worker.js", "client.js", "rng.js"):
