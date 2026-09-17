@@ -15,19 +15,23 @@ def test_health_and_index():
     assert "Blackboard" in page.text
     assert "Isolated" in page.text
     assert "One against the pack" in page.text
-    assert "Wipe the prey brain" in page.text
-    assert "Wipe the hive brain" in page.text
+    assert "Reset all" in page.text
+    assert "Wipes both brains, the shared map, and all statistics." in page.text
+    assert "Wipe the prey brain" not in page.text
+    assert "Wipe the hive brain" not in page.text
+    assert "Wipe the shared map" not in page.text
     assert "this browser" in page.text
     assert "/data" not in page.text
     assert 'id="share"' in page.text
     assert 'id="prey-plus"' in page.text
     assert 'id="hive-plus"' in page.text
     assert 'href="static/styles.css?v=swarm5"' in page.text
-    assert 'src="static/app.js?v=field4-grid"' in page.text
+    assert 'src="static/app.js?v=reset-all"' in page.text
     js = client.get("/static/app.js")
     assert js.status_code == 200
     assert "createAcademyClient" in js.text
-    assert "resetBrain" in js.text
+    assert 'academy.call("reset")' in js.text
+    assert "Confirm: wipe brains, map, and statistics" in js.text
     assert "burst.running === false" in js.text
     assert page.headers.get("cache-control") == "no-store"
     for name in ("physics.js", "agents.js", "trainer.js", "memory.js", "swarm.js", "academy-worker.js", "client.js", "rng.js"):

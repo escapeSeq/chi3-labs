@@ -142,9 +142,8 @@
           <p class="hint" id="timeout-read">120 s · 2400 steps</p>
         </label>
         <button id="burst" type="button" aria-pressed="false">Burst training off</button>
-        <button id="wipe-memory" type="button">Wipe the shared map</button>
-        <button id="wipe-prey" type="button" class="wipe" data-label="Wipe the prey brain">Wipe the prey brain</button>
-        <button id="wipe-hive" type="button" class="wipe" data-label="Wipe the hive brain">Wipe the hive brain</button>
+        <button id="reset-all" type="button" class="wipe" data-label="Reset all">Reset all</button>
+        <p class="hint" id="reset-warn">Wipes both brains, the shared map, and all statistics.</p>
         <p class="hint" id="burst-read">Burst training is idle.</p>
         <p class="hint" id="status">Flights loop on their own. Empty nets first — expect walls.</p>
         <h3>Learning</h3>
@@ -230,6 +229,6 @@
     <footer>
       <p>Chi3-labs · swarm memory</p>
     </footer>
-    <script src="static/app.js?v=field4-grid" type="module"></script>
+    <script src="static/app.js?v=reset-all" type="module"></script>
   </body>
 </html>

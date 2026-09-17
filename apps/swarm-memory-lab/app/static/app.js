@@ -374,68 +374,41 @@ $("pause").addEventListener("click", () => {
   else resumeFlights();
 });
 
-$("wipe-memory").addEventListener("click", async () => {
+let resetTimer = null;
+
+function resetResetButton() {
+  const btn = $("reset-all");
+  if (!btn) return;
+  btn.classList.remove("is-confirm");
+  btn.textContent = btn.dataset.label || "Reset all";
+  if (resetTimer) {
+    clearTimeout(resetTimer);
+    resetTimer = null;
+  }
+}
+
+$("reset-all").addEventListener("click", async () => {
+  const btn = $("reset-all");
+  if (!btn) return;
+  if (!btn.classList.contains("is-confirm")) {
+    btn.classList.add("is-confirm");
+    btn.textContent = "Confirm: wipe brains, map, and statistics";
+    $("status").textContent = "This cannot be undone. Click again within 5 seconds to reset everything.";
+    resetTimer = setTimeout(resetResetButton, 5000);
+    return;
+  }
+  resetResetButton();
   try {
-    const body = await academy.call("resetMemory");
+    stopBurstPoll();
+    setBurstControls(false);
+    const body = await academy.call("reset");
     applyStatus(body);
-    $("status").textContent = "Shared map wiped. Scent, danger, and kill heat are gone.";
     paintMemory(body.memory);
+    $("status").textContent = "Reset. Brains, shared map, and statistics are empty.";
+    restartFlights();
   } catch (err) {
     $("status").textContent = err.message;
   }
-});
-
-const wipeTimers = {};
-
-function resetWipeButton(id) {
-  const btn = $(id);
-  if (!btn) return;
-  btn.classList.remove("is-confirm");
-  btn.textContent = btn.dataset.label || btn.textContent;
-  if (wipeTimers[id]) {
-    clearTimeout(wipeTimers[id]);
-    wipeTimers[id] = null;
-  }
-}
-
-function armWipe(id, confirmText, onConfirm) {
-  const btn = $(id);
-  if (!btn) return;
-  if (btn.classList.contains("is-confirm")) {
-    resetWipeButton(id);
-    onConfirm();
-    return;
-  }
-  ["wipe-prey", "wipe-hive"].forEach((other) => {
-    if (other !== id) resetWipeButton(other);
-  });
-  btn.classList.add("is-confirm");
-  btn.textContent = confirmText;
-  wipeTimers[id] = setTimeout(() => resetWipeButton(id), 5000);
-}
-
-$("wipe-prey").addEventListener("click", () => {
-  armWipe("wipe-prey", "Confirm wipe prey brain", async () => {
-    try {
-      const body = await academy.call("resetBrain", { brain: "prey" });
-      applyStatus(body);
-      $("status").textContent = "Prey brain wiped. Every prey starts untrained.";
-    } catch (err) {
-      $("status").textContent = err.message;
-    }
-  });
-});
-
-$("wipe-hive").addEventListener("click", () => {
-  armWipe("wipe-hive", "Confirm wipe hive brain", async () => {
-    try {
-      const body = await academy.call("resetBrain", { brain: "hive" });
-      applyStatus(body);
-      $("status").textContent = "Hive brain wiped. Every hunter starts untrained.";
-    } catch (err) {
-      $("status").textContent = err.message;
-    }
-  });
 });
 
 function setBurstControls(on) {
