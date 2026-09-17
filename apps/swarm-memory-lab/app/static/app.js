@@ -534,16 +534,18 @@ function drawField(frame) {
   paintHeat(ctx, frame.memory || state.lastMemory);
   ctx.strokeStyle = "rgba(231,239,230,0.08)";
   ctx.lineWidth = 1;
+  const arena = state.physics.arena || 2;
   for (let i = 1; i < 8; i += 1) {
+    const u = (i / 8) * arena;
     ctx.beginPath();
-    ctx.moveTo(xy(i / 8), xy(0));
-    ctx.lineTo(xy(i / 8), xy(1));
-    ctx.moveTo(xy(0), xy(i / 8));
-    ctx.lineTo(xy(1), xy(i / 8));
+    ctx.moveTo(xy(u), xy(0));
+    ctx.lineTo(xy(u), xy(arena));
+    ctx.moveTo(xy(0), xy(u));
+    ctx.lineTo(xy(arena), xy(u));
     ctx.stroke();
   }
   ctx.strokeStyle = "rgba(230,195,106,0.35)";
-  ctx.strokeRect(xy(0), xy(0), xy(1) - xy(0), xy(1) - xy(0));
+  ctx.strokeRect(xy(0), xy(0), xy(arena) - xy(0), xy(arena) - xy(0));
   const sense = state.physics.sense_range || 0.4;
   const planes = frame.planes || [];
   const livingPrey = planes.filter((p) => p.role === "prey" && p.alive);
