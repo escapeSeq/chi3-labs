@@ -1,15 +1,13 @@
+import { createAcademyClient } from "./client.js";
+
+const academy = createAcademyClient(new URL("./academy-worker.js", import.meta.url));
+
 const $ = (id) => document.getElementById(id);
 function text(id, value) {
   const el = $(id);
   if (el) el.textContent = value;
 }
 
-async function liveJSON(url, opts = {}) {
-  const sep = url.includes("?") ? "&" : "?";
-  const res = await fetch(`${url}${sep}t=${Date.now()}`, { cache: "no-store", ...opts });
-  const body = await res.json().catch(() => ({}));
-  return { res, body };
-}
 const PALETTE = ["#e85d4c", "#3db8c5", "#e6c36a", "#7c6bff", "#5dce8a", "#e07ab5", "#f08a4b", "#8aa09a", "#6ec6ff"];
 const state = {
   timer: null,
@@ -187,13 +185,7 @@ async function pushTimeout() {
   const seconds = timeoutSeconds();
   setTimeoutSeconds(seconds);
   try {
-    const res = await fetch("api/timeout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ seconds }),
-    });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.detail || "Timeout update failed");
+    const body = await academy.call("timeout", { seconds });
     state.timeoutDirty = false;
     applyStatus(body);
     $("status").textContent = `Sortie timeout set to ${seconds}s. Next fight uses the new limit.`;
@@ -301,13 +293,7 @@ async function pushPlanes() {
   const n = planeCount();
   setPlaneCount(n);
   try {
-    const res = await fetch("api/planes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ n }),
-    });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.detail || "Plane count update failed");
+    const body = await academy.call("planes", { n });
     state.planesDirty = false;
     applyStatus(body);
     $("status").textContent = fightMode() === "hunt"
@@ -334,13 +320,7 @@ async function pushMode() {
   const mode = $("mode")?.value === "hunt" ? "hunt" : "ffa";
   setFightMode(mode);
   try {
-    const res = await fetch("api/mode", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode }),
-    });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.detail || "Mode update failed");
+    const body = await academy.call("mode", { mode });
     state.modeDirty = false;
     applyStatus(body);
     $("status").textContent = mode === "hunt"
@@ -689,13 +669,7 @@ function readRosterForm() {
 async function pushRoster() {
   const payload = readRosterForm();
   try {
-    const res = await fetch("api/roster", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = await res.json();
-    if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Roster update failed");
+    const body = await academy.call("roster", payload);
     state.rosterDirty = false;
     applyStatus(body);
     $("status").textContent = "Hangar saved. A library pick copies onto the plane; the snapshot stays put.";
@@ -707,13 +681,7 @@ async function pushRoster() {
 
 async function reviseBrain(id, seat) {
   try {
-    const res = await fetch(`api/brains/${id}/revise`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(seat == null ? {} : { seat }),
-    });
-    const body = await res.json();
-    if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Revise failed");
+    const body = await academy.call("revise", { id, seat: seat == null ? null : seat });
     applyStatus(body);
     $("status").textContent =
       seat == null
@@ -726,9 +694,7 @@ async function reviseBrain(id, seat) {
 
 async function dropBrain(id) {
   try {
-    const res = await fetch(`api/brains/${id}`, { method: "DELETE" });
-    const body = await res.json();
-    if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Could not delete brain");
+    const body = await academy.call("removeBrain", { id });
     if (state.inspectId === id) state.inspectId = null;
     applyStatus(body);
     $("status").textContent = "Revision deleted.";
@@ -739,9 +705,7 @@ async function dropBrain(id) {
 
 async function wipeBrain(id) {
   try {
-    const res = await fetch(`api/brains/${id}/wipe`, { method: "POST" });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.detail || "Wipe failed");
+    const body = await academy.call("wipeBrain", { id });
     applyStatus(body);
     $("status").textContent = `${brainLabel(id)} weights scrambled.`;
   } catch (err) {
@@ -785,14 +749,14 @@ function startBurstPoll() {
 
 async function pollBurst() {
   try {
-    const { body: burst } = await liveJSON("api/burst");
+    const burst = await academy.call("burst");
     const trained = Number(burst.trained || 0);
     const mark = burstMilestone(trained);
     if (mark >= BURST_REPORT && mark !== state.burstShown) {
       state.burstShown = mark;
       text("burst-read", `Burst training · ${mark.toLocaleString()} sorties`);
       $("status").textContent = `Burst training running · ${mark.toLocaleString()} sorties.`;
-      const { body: snap } = await liveJSON("api/state");
+      const snap = await academy.call("state");
       applyStatus(snap);
     } else if (!state.burstShown) {
       text("burst-read", "Burst training · 0 sorties");
@@ -821,10 +785,7 @@ function finishBurst(burst) {
     ? burst.error
     : `Stopped burst training after ${trained.toLocaleString()} sorties. Continuous flights resume.`;
   if (trained) {
-    fetch("api/state")
-      .then((res) => res.json())
-      .then((snap) => applyStatus(snap))
-      .catch(() => {});
+    academy.call("state").then((snap) => applyStatus(snap)).catch(() => {});
   }
   if (shouldResume) resumeFlights();
 }
@@ -837,17 +798,12 @@ async function startBurst() {
   text("burst-read", "Burst training · 0 sorties");
   $("status").textContent = "Burst training started. Counter updates every 10,000 sorties.";
   try {
-    const { res, body } = await liveJSON("api/burst/start", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lr: 0.018, seconds: timeoutSeconds() }),
-    });
-    if (!res.ok) throw new Error(body.detail || "Burst start failed");
+    await academy.call("startBurst", { lr: 0.018, seconds: timeoutSeconds() });
     startBurstPoll();
   } catch (err) {
     try {
-      const { body } = await liveJSON("api/burst");
-      if (body.running === true) {
+      const burst = await academy.call("burst");
+      if (burst.running === true) {
         startBurstPoll();
         return;
       }
@@ -863,8 +819,7 @@ async function stopBurst() {
   if (btn) btn.disabled = true;
   $("status").textContent = "Stopping burst after the current sortie…";
   try {
-    const { res, body } = await liveJSON("api/burst/stop", { method: "POST" });
-    if (!res.ok) throw new Error(body.detail || "Burst stop failed");
+    const body = await academy.call("stopBurst");
     if (body.running === false) {
       stopBurstPoll();
       applyStatus(body);
@@ -1199,9 +1154,7 @@ async function flyNext(loopId) {
   if (state.bursting || !state.running || loopId !== state.loopId || state.busy) return;
   state.busy = true;
   try {
-    const res = await fetch("api/sortie", { method: "POST" });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.detail || "Sortie failed");
+    const body = await academy.call("play", { learn: true, trace: true });
     if (!state.running || loopId !== state.loopId) {
       state.busy = false;
       return;
@@ -1369,7 +1322,7 @@ function paintChart(curve) {
 }
 
 async function boot() {
-  const snap = await (await fetch("api/state")).json();
+  const snap = await academy.boot();
   applyStatus(snap);
   if (snap.physics?.timeout != null) setTimeoutSeconds(snap.physics.timeout);
   if (snap.physics?.n_planes != null) setPlaneCount(snap.physics.n_planes);
@@ -1389,7 +1342,7 @@ async function boot() {
     return;
   }
   if (snap.stored && !snap.empty) {
-    $("status").textContent = `Restored brains from ${snap.data_dir}. Continuous flights resume.`;
+    $("status").textContent = "Restored brains from this browser. Continuous flights resume.";
   }
   resumeFlights();
 }

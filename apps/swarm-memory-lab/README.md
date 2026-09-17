@@ -48,12 +48,22 @@ The field physics match dogfight: constant speed, yaw capped by
 speed ÷ turn radius, gun welded to the nose. Default fight is prey against the pack. Add more prey or more hive drones
 one at a time; they still share those two brains.
 
-Weights live on **`/data`**. On Railway, attach a volume at `/data` and set
-`PORT=8083` as a service variable. The proxy reaches this lab at `/swarm/`.
+Policies, the shared map settings, and the scoreboard stay in **this
+browser** (`localStorage`). Close the tab and they are still there; another
+device starts empty. Training, including burst, runs in a Web Worker in
+the page. Close the tab and burst stops.
+
+On Railway (behind the monorepo proxy):
+
+- Set this service **Root Directory** to `apps/swarm-memory-lab`.
+- Do **not** generate a public domain here. The `proxy` service is the
+  public entry; this lab is reached at `/swarm/` over private networking.
+- Set `PORT=8083` as a **service variable** and leave the start command empty.
 
 ## Tests
 
 ```bash
 python -m pip install -r requirements-dev.txt
 python -m pytest
+node --test tests/js-academy.test.mjs
 ```

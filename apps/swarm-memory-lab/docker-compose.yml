@@ -6,9 +6,3 @@ services:
     restart: unless-stopped
     environment:
       PYTHONUNBUFFERED: "1"
-      SWARM_DATA: /data
-    volumes:
-      - swarm-memory:/data
-
-volumes:
-  swarm-memory:

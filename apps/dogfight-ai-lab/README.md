@@ -52,10 +52,10 @@ entries stay until you delete them. Putting a library brain on a plane
 copies it; the stored snapshot does not change. Swapping a working copy
 discards that copy and does not write into the library.
 
-Policies, revisions, hangar seats, and the scoreboard are stored on
-**`/data`** (`p1.npz`, `p2.npz`, …, `academy.json`). Reset statistics to
-zero wins and the learning chart without touching weights. Wipe all brains
-to scramble weights and keep names and seats.
+Policies, revisions, hangar seats, and the scoreboard stay in **this
+browser** (`localStorage`). Close the tab and they are still there; another
+device starts empty. Training, including burst, runs in a Web Worker in
+the page. Close the tab and burst stops.
 
 On Railway (behind the monorepo proxy):
 
@@ -67,14 +67,11 @@ On Railway (behind the monorepo proxy):
   `PORT`) and leave the start command empty so the Dockerfile can run
   uvicorn on `$PORT`. The image binds dual-stack so the proxy can reach
   this lab over Railway private IPv6.
-- Do not put `VOLUME` in the Dockerfile. Attach a **Railway Volume** with
-  mount path `/data` — never `/app` or `/lab`, or the volume will hide the
-  installed code and you will see `ModuleNotFoundError: numpy`.
-- The lab also honors `RAILWAY_VOLUME_MOUNT_PATH` if you mount elsewhere.
 
 ## Tests
 
 ```bash
 python -m pip install -r requirements-dev.txt
 python -m pytest
+node --test tests/js-academy.test.mjs
 ```

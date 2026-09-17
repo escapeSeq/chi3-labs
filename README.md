@@ -73,8 +73,8 @@ public domain; the labs talk to it over Railway private networking.
 | `nonlinear-physics-lab` | `apps/nonlinear-physics-lab` | no | Set `PORT=8080` |
 | `analog-chi3-lab` | `apps/analog-chi3-lab` | no | Set `PORT=8080` |
 | `handwriting-ai-lab` | `apps/handwriting-ai-lab` | no | Set `PORT=8081`. Attach a volume at `/data` |
-| `dogfight-ai-lab` | `apps/dogfight-ai-lab` | no | Set `PORT=8082`. Attach a volume at `/data` |
-| `swarm-memory-lab` | `apps/swarm-memory-lab` | no | Set `PORT=8083`. Attach a volume at `/data` |
+| `dogfight-ai-lab` | `apps/dogfight-ai-lab` | no | Set `PORT=8082`. Brains stay in the browser |
+| `swarm-memory-lab` | `apps/swarm-memory-lab` | no | Set `PORT=8083`. Brains stay in the browser |
 | `wave-rider-lab` | `apps/wave-rider-lab` | no | Set `PORT=8080` |
 | `proxy` | `proxy` | yes | Generate the public domain here |
 
@@ -102,5 +102,5 @@ Leave each service's start command empty so the Dockerfiles run. The Python
 lab images bind dual-stack (`--host ''`) so Railway's private IPv6 network can
 reach them; IPv4-only `0.0.0.0` makes the hub work and every `/physics/`,
 `/analog/`, `/handwriting/`, `/dogfight/`, `/swarm/`, `/waves/` URL 502. Do not put `VOLUME` in the
-dogfight, swarm, or handwriting Dockerfiles; mount the Railway volume at `/data`, never `/app` or
-`/lab`.
+handwriting Dockerfile; mount the Railway volume at `/data`, never `/app` or
+`/lab`. Dogfight and swarm keep brains in the browser, so they do not need a volume.

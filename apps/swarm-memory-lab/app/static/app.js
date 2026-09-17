@@ -1,14 +1,11 @@
+import { createAcademyClient } from "./client.js";
+
+const academy = createAcademyClient(new URL("./academy-worker.js", import.meta.url));
+
 const $ = (id) => document.getElementById(id);
 function text(id, value) {
   const el = $(id);
   if (el) el.textContent = value;
-}
-
-async function liveJSON(url, opts = {}) {
-  const sep = url.includes("?") ? "&" : "?";
-  const res = await fetch(`${url}${sep}t=${Date.now()}`, { cache: "no-store", ...opts });
-  const body = await res.json().catch(() => ({}));
-  return { res, body };
 }
 
 const PALETTE = ["#e85d4c", "#3db8c5", "#e6c36a", "#7c6bff", "#5dce8a", "#e07ab5", "#f08a4b", "#8aa09a"];
@@ -153,22 +150,11 @@ function setGain(id, readId, value, suffix) {
   text(readId, `${v.toFixed(2)} · ${suffix}`);
 }
 
-async function pushJson(url, body) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || "Request failed");
-  return data;
-}
-
 async function pushTimeout() {
   const seconds = timeoutSeconds();
   setTimeoutSeconds(seconds);
   try {
-    const body = await pushJson("api/timeout", { seconds });
+    const body = await academy.call("timeout", { seconds });
     state.timeoutDirty = false;
     applyStatus(body);
     $("status").textContent = `Sortie timeout set to ${seconds}s.`;
@@ -231,8 +217,8 @@ async function flushTeam() {
   teamQueue.inflight = true;
   try {
     let body = null;
-    if (prey != null) body = await pushJson("api/prey", { n: prey });
-    if (hive != null) body = await pushJson("api/hive", { n: hive });
+    if (prey != null) body = await academy.call("prey", { n: prey });
+    if (hive != null) body = await academy.call("hive", { n: hive });
     state.preyDirty = teamQueue.prey != null;
     state.hiveDirty = teamQueue.hive != null;
     if (body) applyStatus(body);
@@ -252,7 +238,7 @@ async function pushMode() {
   const mode = $("mode").value === "ffa" ? "ffa" : "hunt";
   state.mode = mode;
   try {
-    const body = await pushJson("api/mode", { mode });
+    const body = await academy.call("mode", { mode });
     state.modeDirty = false;
     applyStatus(body);
     $("status").textContent = mode === "hunt" ? "One against the pack." : "Last plane standing.";
@@ -267,7 +253,7 @@ async function pushShare() {
   const share = shareMode();
   state.share = share;
   try {
-    const body = await pushJson("api/share", { share });
+    const body = await academy.call("share", { share });
     state.shareDirty = false;
     applyStatus(body);
     const copy = {
@@ -289,7 +275,7 @@ async function pushGains() {
   setGain("swarm-gain", "swarm-read", swarm, "flocking + hunt roles mix into yaw");
   setGain("memory-gain", "memory-read", memory, "follow the shared prey scent");
   try {
-    const body = await pushJson("api/gains", { swarm_gain: swarm, memory_gain: memory });
+    const body = await academy.call("gains", { swarm_gain: swarm, memory_gain: memory });
     state.gainsDirty = false;
     applyStatus(body);
   } catch (err) {
@@ -384,7 +370,7 @@ $("pause").addEventListener("click", () => {
 
 $("wipe-memory").addEventListener("click", async () => {
   try {
-    const body = await pushJson("api/reset-memory", {});
+    const body = await academy.call("resetMemory");
     applyStatus(body);
     $("status").textContent = "Shared map wiped. Scent, danger, and kill heat are gone.";
     paintMemory(body.memory);
@@ -425,7 +411,7 @@ function armWipe(id, confirmText, onConfirm) {
 $("wipe-prey").addEventListener("click", () => {
   armWipe("wipe-prey", "Confirm wipe prey brain", async () => {
     try {
-      const body = await pushJson("api/reset-brain", { brain: "prey" });
+      const body = await academy.call("resetBrain", { brain: "prey" });
       applyStatus(body);
       $("status").textContent = "Prey brain wiped. Every prey starts untrained.";
     } catch (err) {
@@ -437,7 +423,7 @@ $("wipe-prey").addEventListener("click", () => {
 $("wipe-hive").addEventListener("click", () => {
   armWipe("wipe-hive", "Confirm wipe hive brain", async () => {
     try {
-      const body = await pushJson("api/reset-brain", { brain: "hive" });
+      const body = await academy.call("resetBrain", { brain: "hive" });
       applyStatus(body);
       $("status").textContent = "Hive brain wiped. Every hunter starts untrained.";
     } catch (err) {
@@ -461,7 +447,7 @@ function startBurstPoll() {
   stopBurstPoll();
   state.burstTimer = setInterval(async () => {
     try {
-      const { body: burst } = await liveJSON("api/burst");
+      const burst = await academy.call("burst");
       const shown = burstMilestone(burst.trained);
       if (shown !== state.burstShown) {
         state.burstShown = shown;
@@ -470,7 +456,7 @@ function startBurstPoll() {
       if (burst.running === false) {
         stopBurstPoll();
         setBurstControls(false);
-        const { body: snap } = await liveJSON("api/state");
+        const snap = await academy.call("state");
         applyStatus(snap);
         $("status").textContent = burst.error ? `Burst stopped: ${burst.error}` : "Burst training stopped.";
         resumeFlights();
@@ -478,7 +464,7 @@ function startBurstPoll() {
     } catch (err) {
       $("status").textContent = err.message;
     }
-  }, 1200);
+  }, 400);
 }
 
 function stopBurstPoll() {
@@ -491,11 +477,7 @@ function stopBurstPoll() {
 $("burst").addEventListener("click", async () => {
   try {
     if (state.bursting) {
-      const { body } = await liveJSON("api/burst/stop", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      });
+      const body = await academy.call("stopBurst");
       applyStatus(body);
       setBurstControls(false);
       stopBurstPoll();
@@ -508,15 +490,10 @@ $("burst").addEventListener("click", async () => {
     text("burst-read", "Burst training · 0 sorties");
     $("status").textContent = "Burst training. Counter updates every 10,000 sorties.";
     try {
-      const { res, body } = await liveJSON("api/burst/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      });
-      if (!res.ok) throw new Error(body.detail || "Burst start failed");
+      await academy.call("startBurst", { lr: 0.014, seconds: timeoutSeconds() });
     } catch (err) {
-      const { body } = await liveJSON("api/burst");
-      if (body.running !== true) throw err;
+      const burst = await academy.call("burst");
+      if (burst.running !== true) throw err;
     }
     startBurstPoll();
   } catch (err) {
@@ -880,10 +857,8 @@ async function loopSortie() {
   if (!state.running || state.bursting) return;
   const id = state.flightId;
   try {
-    const res = await fetch("api/sortie", { method: "POST" });
-    const body = await res.json();
+    const body = await academy.call("play", { learn: true, trace: true });
     if (id !== state.flightId || !state.running || state.bursting) return;
-    if (!res.ok) throw new Error(body.detail || "Sortie failed");
     if (body.aborted) {
       if (state.running) loopSortie();
       return;
@@ -901,7 +876,7 @@ async function loopSortie() {
 }
 
 async function boot() {
-  const snap = await (await fetch("api/state")).json();
+  const snap = await academy.boot();
   applyStatus(snap);
   drawEmpty();
   if (snap.burst?.running) {

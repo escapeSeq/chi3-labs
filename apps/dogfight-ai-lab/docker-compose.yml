@@ -6,9 +6,3 @@ services:
     restart: unless-stopped
     environment:
       PYTHONUNBUFFERED: "1"
-      DOGFIGHT_DATA: /data
-    volumes:
-      - dogfight-brains:/data
-
-volumes:
-  dogfight-brains:

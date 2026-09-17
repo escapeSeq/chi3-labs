@@ -53,9 +53,6 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       PORT: "8082"
-      DOGFIGHT_DATA: /data
-    volumes:
-      - dogfight-brains:/data
 
   wave-rider-lab:
     build:
@@ -76,9 +73,6 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       PORT: "8083"
-      SWARM_DATA: /data
-    volumes:
-      - swarm-memory:/data
 
   proxy:
     build:
@@ -103,6 +97,4 @@ services:
       - swarm-memory-lab
 
 volumes:
-  dogfight-brains:
-  swarm-memory:
   handwriting-brains:
