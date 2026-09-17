@@ -411,6 +411,16 @@ $("reset-all").addEventListener("click", async () => {
   }
 });
 
+$("clear-stats").addEventListener("click", async () => {
+  try {
+    const body = await academy.call("resetStats");
+    applyStatus(body);
+    $("status").textContent = "Statistics cleared. Brains and map are unchanged.";
+  } catch (err) {
+    $("status").textContent = err.message;
+  }
+});
+
 function setBurstControls(on) {
   state.bursting = on;
   $("burst").classList.toggle("is-on", on);

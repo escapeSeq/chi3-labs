@@ -465,6 +465,30 @@ blockquote {
   font-size: 0.95rem;
 }
 
+.hangar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.55rem;
+}
+
+.hangar-head h2,
+.hangar-head .hint {
+  margin: 0;
+}
+
+.hangar-head .hint {
+  margin-top: 0.35rem;
+}
+
+.hangar-head button {
+  width: auto;
+  margin: 0;
+  flex: 0 0 auto;
+  padding: 0.35rem 0.75rem;
+}
+
 .intel-head {
   display: flex;
   justify-content: space-between;

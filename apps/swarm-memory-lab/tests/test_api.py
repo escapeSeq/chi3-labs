@@ -25,12 +25,14 @@ def test_health_and_index():
     assert 'id="share"' in page.text
     assert 'id="prey-plus"' in page.text
     assert 'id="hive-plus"' in page.text
-    assert 'href="static/styles.css?v=swarm5"' in page.text
-    assert 'src="static/app.js?v=reset-all"' in page.text
+    assert 'href="static/styles.css?v=clear-stats"' in page.text
+    assert 'src="static/app.js?v=clear-stats"' in page.text
+    assert 'id="clear-stats"' in page.text
     js = client.get("/static/app.js")
     assert js.status_code == 200
     assert "createAcademyClient" in js.text
     assert 'academy.call("reset")' in js.text
+    assert 'academy.call("resetStats")' in js.text
     assert "Confirm: wipe brains, map, and statistics" in js.text
     assert "burst.running === false" in js.text
     assert page.headers.get("cache-control") == "no-store"
