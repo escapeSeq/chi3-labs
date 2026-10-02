@@ -20,6 +20,7 @@
 	redir /dogfight /dogfight/ 308
 	redir /swarm /swarm/ 308
 	redir /waves /waves/ 308
+	redir /drone /drone/ 308
 
 	handle_path /physics/* {
 		reverse_proxy http://{$PHYSICS_UPSTREAM} {
@@ -68,6 +69,15 @@
 
 	handle_path /waves/* {
 		reverse_proxy http://{$WAVE_UPSTREAM} {
+			transport http {
+				dial_timeout 8s
+			}
+			lb_try_duration 12s
+		}
+	}
+
+	handle_path /drone/* {
+		reverse_proxy http://{$DRONE_UPSTREAM} {
 			transport http {
 				dial_timeout 8s
 			}

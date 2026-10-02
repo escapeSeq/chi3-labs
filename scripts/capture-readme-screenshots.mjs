@@ -13,6 +13,7 @@ const labs = {
   dogfight: "http://127.0.0.1:8093/",
   swarm: "http://127.0.0.1:8094/",
   waves: "http://127.0.0.1:8096/",
+  drone: "http://127.0.0.1:8097/",
 };
 
 async function ready(page) {
@@ -80,6 +81,15 @@ await page.evaluate(() => {
 });
 await new Promise((r) => setTimeout(r, 2500));
 await shot(page, "waves");
+
+await page.goto(labs.drone, { waitUntil: "domcontentloaded", timeout: 30000 });
+await ready(page);
+await page.click('[data-tab="forces"]');
+const cruise = await page.$('[data-fpreset="cruise"]');
+if (cruise) await cruise.click();
+await page.evaluate(() => window.scrollTo(0, 0));
+await new Promise((r) => setTimeout(r, 1200));
+await shot(page, "drone");
 
 await browser.close();
 console.log("done");

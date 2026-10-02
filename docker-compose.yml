@@ -9,6 +9,7 @@
 # Dogfight lab:      http://localhost:8080/dogfight/
 # Swarm lab:         http://localhost:8080/swarm/
 # Wave lab:          http://localhost:8080/waves/
+# Drone lab:         http://localhost:8080/drone/
 
 services:
   nonlinear-physics-lab:
@@ -74,6 +75,16 @@ services:
       PYTHONUNBUFFERED: "1"
       PORT: "8083"
 
+  drone-attitude-lab:
+    build:
+      context: ./apps/drone-attitude-lab
+    expose:
+      - "8080"
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PORT: "8080"
+
   proxy:
     build:
       context: ./proxy
@@ -88,6 +99,7 @@ services:
       DOGFIGHT_UPSTREAM: dogfight-ai-lab:8082
       WAVE_UPSTREAM: wave-rider-lab:8080
       SWARM_UPSTREAM: swarm-memory-lab:8083
+      DRONE_UPSTREAM: drone-attitude-lab:8080
     depends_on:
       - nonlinear-physics-lab
       - analog-chi3-lab
@@ -95,6 +107,7 @@ services:
       - dogfight-ai-lab
       - wave-rider-lab
       - swarm-memory-lab
+      - drone-attitude-lab
 
 volumes:
   handwriting-brains:

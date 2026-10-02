@@ -2,11 +2,13 @@
 
 Educational labs on nonlinear analog physics, analog computing, how small
 neural nets **train** versus **use** what they learned, how a pack of drones
-shares memory, and how a hull rides a stacked sea.
+shares memory, how a hull rides a stacked sea, and how a drone points its one
+thrust axis.
 
 Turn a knob and a medium writes new frequencies. Teach a tiny net, then freeze
 it and read the templates. Send a pack that shares one map. Put a hull on a sea
-that actually pushes back.
+that actually pushes back. Tilt a quadrotor and watch Euler angles break where
+quaternions don't.
 
 A Caddy proxy sits in front of the labs so they share one origin.
 
@@ -41,6 +43,13 @@ A Caddy proxy sits in front of the labs so they share one origin.
       <p><strong>Waves — heave from the hull, not a canned path.</strong> Stack Gerstner layers and let strip-theory buoyancy pitch the boat in real time.</p>
     </td>
   </tr>
+  <tr>
+    <td width="50%">
+      <a href="apps/drone-attitude-lab"><img src="docs/screenshots/drone.png" width="100%" alt="Drone lab: tilted quadrotor with thrust, weight and net force vectors" /></a>
+      <p><strong>Drone — a quadrotor can only push one way.</strong> Euler angles, quaternions, rotation vectors, rotor thrust and torque. Spin the frame, lock a gimbal, SLERP between attitudes.</p>
+    </td>
+    <td width="50%"></td>
+  </tr>
 </table>
 
 | Path | Project |
@@ -52,6 +61,7 @@ A Caddy proxy sits in front of the labs so they share one origin.
 | [`/dogfight/`](apps/dogfight-ai-lab) | Empty policies learn a 2-D turn-radius gun fight by trial and error |
 | [`/swarm/`](apps/swarm-memory-lab) | Same gun fight with a shared tactical map, swarm roles, and hive weights |
 | [`/waves/`](apps/wave-rider-lab) | Gerstner sea stack and strip-theory seakeeping: heave and pitch on a live hull |
+| [`/drone/`](apps/drone-attitude-lab) | Quadrotor attitude: Euler angles, quaternions, rotation vectors, gimbal lock, rotor forces and torques |
 
 ## Quick start
 
@@ -65,7 +75,7 @@ folder without the proxy.
 
 ## Railway
 
-Deploy **seven services** from this repo. Only the proxy should have a
+Deploy **eight services** from this repo. Only the proxy should have a
 public domain; the labs talk to it over Railway private networking.
 
 | Service name | Root directory | Public | Notes |
@@ -76,10 +86,11 @@ public domain; the labs talk to it over Railway private networking.
 | `dogfight-ai-lab` | `apps/dogfight-ai-lab` | no | Set `PORT=8082`. Brains stay in the browser |
 | `swarm-memory-lab` | `apps/swarm-memory-lab` | no | Set `PORT=8083`. Brains stay in the browser |
 | `wave-rider-lab` | `apps/wave-rider-lab` | no | Set `PORT=8080` |
+| `drone-attitude-lab` | `apps/drone-attitude-lab` | no | Set `PORT=8080` |
 | `proxy` | `proxy` | yes | Generate the public domain here |
 
 `PORT` on each lab must be a **service variable** in the Railway dashboard
-(8080 for analog, physics, and waves, 8081 handwriting, 8082 dogfight, 8083 swarm). `${{service.PORT}}`
+(8080 for analog, physics, waves, and drone, 8081 handwriting, 8082 dogfight, 8083 swarm). `${{service.PORT}}`
 does not pick up the runtime `PORT` Railway injects, so the proxy would get
 `host:` and return 502.
 
@@ -93,6 +104,7 @@ On the **proxy** service:
 | `DOGFIGHT_UPSTREAM` | `${{dogfight-ai-lab.RAILWAY_PRIVATE_DOMAIN}}:${{dogfight-ai-lab.PORT}}` |
 | `SWARM_UPSTREAM` | `${{swarm-memory-lab.RAILWAY_PRIVATE_DOMAIN}}:${{swarm-memory-lab.PORT}}` |
 | `WAVE_UPSTREAM` | `${{wave-rider-lab.RAILWAY_PRIVATE_DOMAIN}}:${{wave-rider-lab.PORT}}` |
+| `DRONE_UPSTREAM` | `${{drone-attitude-lab.RAILWAY_PRIVATE_DOMAIN}}:${{drone-attitude-lab.PORT}}` |
 
 If those are unset, the proxy defaults to
 `<service-name>.railway.internal` plus the ports above — only if the
@@ -101,6 +113,6 @@ Railway service names match this table.
 Leave each service's start command empty so the Dockerfiles run. The Python
 lab images bind dual-stack (`--host ''`) so Railway's private IPv6 network can
 reach them; IPv4-only `0.0.0.0` makes the hub work and every `/physics/`,
-`/analog/`, `/handwriting/`, `/dogfight/`, `/swarm/`, `/waves/` URL 502. Do not put `VOLUME` in the
+`/analog/`, `/handwriting/`, `/dogfight/`, `/swarm/`, `/waves/`, `/drone/` URL 502. Do not put `VOLUME` in the
 handwriting Dockerfile; mount the Railway volume at `/data`, never `/app` or
 `/lab`. Dogfight and swarm keep brains in the browser, so they do not need a volume.

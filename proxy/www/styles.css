@@ -160,6 +160,10 @@ h1 {
   --accent: var(--blue);
 }
 
+.bench.drone {
+  --accent: var(--amber);
+}
+
 .bench:hover,
 .bench:focus-visible {
   border-color: var(--accent);

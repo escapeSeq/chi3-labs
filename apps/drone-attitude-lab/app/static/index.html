@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>✣ Drone Attitude Lab — angles, quaternions, forces</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%230c1418' width='64' height='64'/%3E%3Ctext x='32' y='44' text-anchor='middle' fill='%23e6c36a' font-size='32' font-family='monospace'%3E✣%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="static/styles.css" />
+  </head>
+  <body>
+    <header class="mast">
+      <div class="brand">
+        <span class="mark">✣</span>
+        <div class="brand-copy">
+          <div class="brand-row">
+            <p class="eyebrow">Chi3-labs · drone attitude</p>
+            <nav class="labs" aria-label="Chi3 labs">
+              <a href="/">hub</a>
+              <a href="/physics/">physics</a>
+              <a href="/analog/">analog</a>
+              <a href="/handwriting/">handwriting</a>
+              <a href="/dogfight/">dogfight</a>
+              <a href="/swarm/">swarm</a>
+              <a href="/waves/">waves</a>
+            </nav>
+          </div>
+          <h1>A quadrotor can only push one way</h1>
+        </div>
+      </div>
+      <p class="lede">
+        Four rotors, one thrust axis bolted to the belly. To go anywhere the
+        drone has to <em>point</em> that axis, so everything rides on attitude.
+        Write the same attitude four ways — Euler angles, a quaternion, a
+        rotation vector, a matrix — then tilt the thrust, spin the frame, lock
+        a gimbal, and watch which description breaks first. Drag any 3-D view
+        to orbit.
+      </p>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab is-on" data-tab="attitude" type="button">Attitude</button>
+      <button class="tab" data-tab="forces" type="button">Forces</button>
+      <button class="tab" data-tab="spin" type="button">Spin</button>
+      <button class="tab" data-tab="gimbal" type="button">Gimbal lock</button>
+      <button class="tab" data-tab="interp" type="button">Interpolate</button>
+      <button class="tab" data-tab="primer" type="button">Why quaternions</button>
+      <button class="tab" data-tab="glossary" type="button">Glossary</button>
+    </nav>
+
+    <main>
+      <!-- ============================== ATTITUDE ============================== -->
+      <section id="panel-attitude" class="panel is-on">
+        <aside class="rack">
+          <h2>Point the frame</h2>
+          <p class="help">
+            World is NED (north, east, down). Body is FRD (forward, right, down).
+            <button class="term-jump" type="button" data-jump="term-frames">Frames</button>
+          </p>
+          <label>
+            Roll φ — about body x
+            <input id="a-roll" type="range" min="-180" max="180" step="1" value="25" />
+            <span id="a-roll-read">25°</span>
+          </label>
+          <label>
+            Pitch θ — about body y
+            <input id="a-pitch" type="range" min="-90" max="90" step="1" value="15" />
+            <span id="a-pitch-read">15°</span>
+          </label>
+          <label>
+            Yaw ψ — about body z
+            <input id="a-yaw" type="range" min="-180" max="180" step="1" value="40" />
+            <span id="a-yaw-read">40°</span>
+          </label>
+          <label>
+            Rotation order
+            <select id="a-order">
+              <option value="zyx">Z-Y-X · yaw, pitch, roll (aerospace)</option>
+              <option value="xyz">X-Y-Z · roll, pitch, yaw</option>
+            </select>
+          </label>
+          <p class="help">
+            Same three numbers, other order, different drone. Euler angles are a recipe, not a place.
+            <button class="term-jump" type="button" data-jump="term-euler">Euler angles</button>
+          </p>
+          <div class="actions">
+            <button id="a-play-euler" class="primary" type="button">Play the three turns</button>
+            <button id="a-play-axis" type="button">Play one turn about r</button>
+          </div>
+          <p class="help">
+            Three turns about moving axes, or one turn of α about a fixed axis n̂. Same destination.
+            <button class="term-jump" type="button" data-jump="term-rotvec">Rotation vector</button>
+          </p>
+          <div class="presets">
+            <button type="button" data-apreset="level">Level</button>
+            <button type="button" data-apreset="bank">Bank 30°</button>
+            <button type="button" data-apreset="climb">Nose up 45°</button>
+            <button type="button" data-apreset="flip">Inverted</button>
+            <button type="button" data-apreset="lock">Pitch 90°</button>
+            <button type="button" data-apreset="same">−q is q</button>
+          </div>
+        </aside>
+
+        <div class="stage">
+          <article class="scope">
+            <header>
+              <h3>Frame in the world</h3>
+              <span class="badge" id="a-badge">Z-Y-X</span>
+            </header>
+            <canvas id="a-view" class="view3d" width="1200" height="640"></canvas>
+            <p class="legend">
+              <span><i class="swatch x"></i> body x · forward</span>
+              <span><i class="swatch y"></i> body y · right</span>
+              <span><i class="swatch z"></i> body z · down</span>
+              <span><i class="swatch rv"></i> rotation vector r = α n̂</span>
+              <span>Faint axes are the world N / E / D.</span>
+            </p>
+          </article>
+          <div class="four-ways">
+            <article class="card">
+              <h3>Euler angles <small>3 numbers · a recipe</small></h3>
+              <pre class="eq" id="a-euler">—</pre>
+              <p class="caption" id="a-euler-note">Read left to right as the order the turns happen.</p>
+            </article>
+            <article class="card">
+              <h3>Quaternion <small>4 numbers · |q| = 1</small></h3>
+              <div class="qbars" id="a-qbars"></div>
+              <p class="caption">q = [cos(α/2), sin(α/2) n̂]. Flip every sign and nothing moves.</p>
+            </article>
+            <article class="card">
+              <h3>Rotation vector <small>3 numbers · axis × angle</small></h3>
+              <pre class="eq" id="a-rotvec">—</pre>
+              <p class="caption">The one fixed axis you could turn about, and how far, to land here.</p>
+            </article>
+            <article class="card">
+              <h3>Rotation matrix <small>9 numbers · body → world</small></h3>
+              <div class="matrix" id="a-matrix"></div>
+              <p class="caption">Columns are the body axes written in N / E / D.</p>
+            </article>
+          </div>
+        </div>
+
+        <aside class="meters">
+          <h2>Same attitude</h2>
+          <dl>
+            <div><dt>Turn angle α</dt><dd id="a-m-angle">—</dd></div>
+            <div><dt>Axis n̂</dt><dd id="a-m-axis">—</dd></div>
+            <div><dt>|q|</dt><dd id="a-m-norm">—</dd></div>
+            <div><dt>det R</dt><dd id="a-m-det">—</dd></div>
+            <div><dt>Tilt from level</dt><dd id="a-m-tilt">—</dd></div>
+            <div><dt>Nose heading</dt><dd id="a-m-heading">—</dd></div>
+            <div title="Condition number of the body-rate to Euler-rate map W(φ,θ). 1 is healthy, ∞ is gimbal lock."><dt>cond W</dt><dd id="a-m-cond">—</dd></div>
+          </dl>
+          <blockquote id="a-lesson">
+            Four descriptions, one drone. Move a slider and every card changes together.
+          </blockquote>
+        </aside>
+      </section>
+
+      <!-- ============================== FORCES ============================== -->
+      <section id="panel-forces" class="panel">
+        <aside class="rack">
+          <h2>Rotor bench</h2>
+          <p class="help">
+            Quad X, PX4 numbering. Each rotor pushes along −z body. Sum makes thrust,
+            differences make torque.
+            <button class="term-jump" type="button" data-jump="term-torque">Torque and mixing</button>
+          </p>
+          <div class="motors">
+            <label>
+              ③ front-left · CW
+              <input id="f-m3" type="range" min="0" max="9" step="0.01" value="2.94" />
+              <span id="f-m3-read">2.94 N</span>
+            </label>
+            <label>
+              ① front-right · CCW
+              <input id="f-m1" type="range" min="0" max="9" step="0.01" value="2.94" />
+              <span id="f-m1-read">2.94 N</span>
+            </label>
+            <label>
+              ② rear-left · CCW
+              <input id="f-m2" type="range" min="0" max="9" step="0.01" value="2.94" />
+              <span id="f-m2-read">2.94 N</span>
+            </label>
+            <label>
+              ④ rear-right · CW
+              <input id="f-m4" type="range" min="0" max="9" step="0.01" value="2.94" />
+              <span id="f-m4-read">2.94 N</span>
+            </label>
+          </div>
+          <label>
+            Roll φ
+            <input id="f-roll" type="range" min="-60" max="60" step="1" value="0" />
+            <span id="f-roll-read">0°</span>
+          </label>
+          <label>
+            Pitch θ
+            <input id="f-pitch" type="range" min="-60" max="60" step="1" value="0" />
+            <span id="f-pitch-read">0°</span>
+          </label>
+          <label>
+            Mass
+            <input id="f-mass" type="range" min="0.5" max="2.5" step="0.05" value="1.2" />
+            <span id="f-mass-read">1.20 kg</span>
+          </label>
+          <div class="actions">
+            <button id="f-hold" class="primary" type="button">Hold altitude (T = mg / cos tilt)</button>
+          </div>
+          <div class="presets">
+            <button type="button" data-fpreset="hover">Hover</button>
+            <button type="button" data-fpreset="climb">Climb</button>
+            <button type="button" data-fpreset="cruise">Lean + hold</button>
+            <button type="button" data-fpreset="sink">Lean, no extra</button>
+            <button type="button" data-fpreset="roll">Roll torque</button>
+            <button type="button" data-fpreset="yaw">Yaw torque</button>
+          </div>
+        </aside>
+
+        <div class="stage">
+          <article class="scope">
+            <header>
+              <h3>Forces in the world</h3>
+              <span class="badge" id="f-badge">hover</span>
+            </header>
+            <canvas id="f-view" class="view3d" width="1200" height="620"></canvas>
+            <p class="legend">
+              <span><i class="swatch thrust"></i> rotor thrust Fᵢ and total T</span>
+              <span><i class="swatch gravity"></i> weight mg</span>
+              <span><i class="swatch net"></i> net force</span>
+              <span><i class="swatch torque"></i> body torque τ</span>
+            </p>
+          </article>
+          <div class="scope-row">
+            <article class="scope">
+              <header>
+                <h3>Force triangle</h3>
+                <span class="badge muted">vertical plane of T</span>
+              </header>
+              <canvas id="f-triangle" width="640" height="360"></canvas>
+              <p class="caption">T splits into T cos tilt (fights weight) and T sin tilt (moves you sideways).</p>
+            </article>
+            <article class="scope">
+              <header>
+                <h3>Top view · mixer</h3>
+                <span class="badge muted">who pushes</span>
+              </header>
+              <canvas id="f-top" width="640" height="360"></canvas>
+              <p class="caption">Bar height is thrust. Arrows show prop spin; the frame is dragged the other way.</p>
+            </article>
+          </div>
+        </div>
+
+        <aside class="meters">
+          <h2>Newton + Euler</h2>
+          <dl>
+            <div><dt>Total thrust T</dt><dd id="f-m-T">—</dd></div>
+            <div><dt>Weight mg</dt><dd id="f-m-W">—</dd></div>
+            <div><dt>Hover needs</dt><dd id="f-m-hover">—</dd></div>
+            <div><dt>Tilt</dt><dd id="f-m-tilt">—</dd></div>
+            <div><dt>Accel N / E</dt><dd id="f-m-ah">—</dd></div>
+            <div><dt>Climb rate change</dt><dd id="f-m-av">—</dd></div>
+            <div><dt>τ (x, y, z)</dt><dd id="f-m-tau">—</dd></div>
+            <div><dt>α = J⁻¹τ</dt><dd id="f-m-alpha">—</dd></div>
+          </dl>
+          <p class="help">
+            Thrust is a body vector; gravity is a world vector. R turns one into the other.
+            <button class="term-jump" type="button" data-jump="term-thrust">Thrust vector</button>
+          </p>
+          <blockquote id="f-lesson">Four equal rotors, level frame: thrust equals weight. Hover.</blockquote>
+        </aside>
+      </section>
+
+      <!-- ============================== SPIN ============================== -->
+      <section id="panel-spin" class="panel">
+        <aside class="rack">
+          <h2>Gyro bench</h2>
+          <p class="help">
+            Gyros measure body rates ω = (p, q, r). Hold them constant and
+            integrate the attitude two ways.
+            <button class="term-jump" type="button" data-jump="term-omega">Angular velocity</button>
+          </p>
+          <label>
+            p — roll rate
+            <input id="s-p" type="range" min="-180" max="180" step="1" value="5" />
+            <span id="s-p-read">5°/s</span>
+          </label>
+          <label>
+            q — pitch rate
+            <input id="s-q" type="range" min="-180" max="180" step="1" value="90" />
+            <span id="s-q-read">90°/s</span>
+          </label>
+          <label>
+            r — yaw rate
+            <input id="s-r" type="range" min="-180" max="180" step="1" value="0" />
+            <span id="s-r-read">0°/s</span>
+          </label>
+          <label>
+            Integrator step
+            <select id="s-dt">
+              <option value="0.002">500 Hz</option>
+              <option value="0.01" selected>100 Hz</option>
+              <option value="0.04">25 Hz</option>
+            </select>
+          </label>
+          <pre class="eq">q̇ = ½ q ⊗ [0, ω]</pre>
+          <div class="actions">
+            <button id="s-run" class="primary" type="button">Pause</button>
+            <button id="s-reset" type="button">Reset to level</button>
+          </div>
+          <div class="presets">
+            <button type="button" data-spreset="yaw">Pure yaw</button>
+            <button type="button" data-spreset="loop">Clean loop</button>
+            <button type="button" data-spreset="wobble">Loop + roll</button>
+            <button type="button" data-spreset="tumble">Tumble</button>
+            <button type="button" data-spreset="coord">Roll + yaw</button>
+            <button type="button" data-spreset="barrel">Barrel roll</button>
+          </div>
+        </aside>
+
+        <div class="stage">
+          <article class="scope">
+            <header>
+              <h3>True attitude vs Euler-angle integrator</h3>
+              <span class="badge" id="s-badge">agree</span>
+            </header>
+            <canvas id="s-view" class="view3d" width="1200" height="560"></canvas>
+            <p class="legend">
+              <span><i class="swatch omega"></i> ω — rotation-rate vector</span>
+              <span><i class="swatch ghost"></i> ghost: integrated as φ̇ θ̇ ψ̇ = W(φ, θ) ω</span>
+              <span>Solid drone: quaternion, exact for constant ω.</span>
+            </p>
+          </article>
+          <div class="scope-row">
+            <article class="scope">
+              <header>
+                <h3>Euler angles of the true attitude</h3>
+                <span class="badge muted">φ θ ψ</span>
+              </header>
+              <canvas id="s-euler" width="640" height="300"></canvas>
+              <p class="caption">Watch them jump by 180° as the nose passes vertical. The drone did not jump.</p>
+            </article>
+            <article class="scope">
+              <header>
+                <h3>Quaternion components</h3>
+                <span class="badge muted">w x y z</span>
+              </header>
+              <canvas id="s-quat" width="640" height="300"></canvas>
+              <p class="caption">Smooth sines for any constant ω. No jumps, no special angles.</p>
+            </article>
+          </div>
+        </div>
+
+        <aside class="meters">
+          <h2>Rates</h2>
+          <dl>
+            <div><dt>|ω| from gyro</dt><dd id="s-m-w">—</dd></div>
+            <div><dt>φ̇</dt><dd id="s-m-rd">—</dd></div>
+            <div><dt>θ̇</dt><dd id="s-m-pd">—</dd></div>
+            <div><dt>ψ̇</dt><dd id="s-m-yd">—</dd></div>
+            <div><dt>Peak Euler / |ω|</dt><dd id="s-m-gain">—</dd></div>
+            <div><dt>Ghost error</dt><dd id="s-m-drift">—</dd></div>
+            <div title="|q| when integrating q += ½ q⊗ω dt without renormalizing"><dt>|q| unnormalized</dt><dd id="s-m-norm">—</dd></div>
+          </dl>
+          <p class="help">
+            Euler rates are not body rates. ψ̇ = (q sin φ + r cos φ) / cos θ.
+            <button class="term-jump" type="button" data-jump="term-gimbal">Gimbal lock</button>
+          </p>
+          <blockquote id="s-lesson">The gyro reads a constant. Watch what the angles have to do to keep up.</blockquote>
+        </aside>
+      </section>
+
+      <!-- ============================== GIMBAL ============================== -->
+      <section id="panel-gimbal" class="panel">
+        <aside class="rack">
+          <h2>Three rings</h2>
+          <p class="help">
+            Euler Z-Y-X is a physical gimbal: yaw ring outside, pitch ring in
+            the middle, roll ring holding the drone.
+            <button class="term-jump" type="button" data-jump="term-gimbal">Gimbal lock</button>
+          </p>
+          <label>
+            Yaw ψ · outer ring
+            <input id="g-yaw" type="range" min="-180" max="180" step="1" value="30" />
+            <span id="g-yaw-read">30°</span>
+          </label>
+          <label>
+            Pitch θ · middle ring
+            <input id="g-pitch" type="range" min="-90" max="90" step="0.5" value="60" />
+            <span id="g-pitch-read">60°</span>
+          </label>
+          <label>
+            Roll φ · inner ring
+            <input id="g-roll" type="range" min="-180" max="180" step="1" value="0" />
+            <span id="g-roll-read">0°</span>
+          </label>
+          <p class="help">
+            Pitch to 90°, then move roll and yaw. Both spin the drone about the same vertical line.
+          </p>
+          <div class="presets">
+            <button type="button" data-gpreset="free">Free</button>
+            <button type="button" data-gpreset="near">Pitch 80°</button>
+            <button type="button" data-gpreset="lock">Locked 90°</button>
+            <button type="button" data-gpreset="down">Locked −90°</button>
+          </div>
+          <label class="check">
+            <input id="g-missing" type="checkbox" checked />
+            Show the missing axis
+          </label>
+        </aside>
+
+        <div class="stage">
+          <div class="scope-row wide-left">
+            <article class="scope">
+              <header>
+                <h3>Gimbal</h3>
+                <span class="badge" id="g-badge">3 axes</span>
+              </header>
+              <canvas id="g-view" class="view3d" width="900" height="640"></canvas>
+              <p class="legend">
+                <span><i class="swatch yaw"></i> yaw ring</span>
+                <span><i class="swatch pitch"></i> pitch ring</span>
+                <span><i class="swatch roll"></i> roll ring</span>
+                <span><i class="swatch missing"></i> no ring turns about this</span>
+              </p>
+            </article>
+            <article class="scope">
+              <header>
+                <h3>Euler rate per body rate</h3>
+                <span class="badge muted">sec θ</span>
+              </header>
+              <canvas id="g-curve" width="520" height="640"></canvas>
+              <p class="caption">How fast ψ must turn for 1°/s of body rate. Infinite at ±90°.</p>
+            </article>
+          </div>
+        </div>
+
+        <aside class="meters">
+          <h2>Degrees of freedom</h2>
+          <dl>
+            <div><dt>Roll axis ∠ yaw axis</dt><dd id="g-m-angle">—</dd></div>
+            <div><dt>cond W</dt><dd id="g-m-cond">—</dd></div>
+            <div><dt>Independent axes</dt><dd id="g-m-dof">—</dd></div>
+            <div><dt>Only defined</dt><dd id="g-m-combo">—</dd></div>
+            <div><dt>Quaternion</dt><dd id="g-m-q">—</dd></div>
+          </dl>
+          <blockquote id="g-lesson">
+            Three rings, three independent axes. Raise pitch and watch the roll axis swing toward the yaw axis.
+          </blockquote>
+        </aside>
+      </section>
+
+      <!-- ============================== INTERPOLATE ============================== -->
+      <section id="panel-interp" class="panel">
+        <aside class="rack">
+          <h2>Two attitudes</h2>
+          <p class="help">
+            Get from A to B. SLERP walks the great circle on the quaternion sphere;
+            Euler lerp slides each angle on its own.
+            <button class="term-jump" type="button" data-jump="term-slerp">SLERP</button>
+          </p>
+          <fieldset>
+            <legend>Start A</legend>
+            <label>φ <input id="i-ar" type="range" min="-180" max="180" step="1" value="0" /><span id="i-ar-read">0°</span></label>
+            <label>θ <input id="i-ap" type="range" min="-89" max="89" step="1" value="0" /><span id="i-ap-read">0°</span></label>
+            <label>ψ <input id="i-ay" type="range" min="-180" max="180" step="1" value="0" /><span id="i-ay-read">0°</span></label>
+          </fieldset>
+          <fieldset>
+            <legend>End B</legend>
+            <label>φ <input id="i-br" type="range" min="-180" max="180" step="1" value="90" /><span id="i-br-read">90°</span></label>
+            <label>θ <input id="i-bp" type="range" min="-89" max="89" step="1" value="80" /><span id="i-bp-read">80°</span></label>
+            <label>ψ <input id="i-by" type="range" min="-180" max="180" step="1" value="90" /><span id="i-by-read">90°</span></label>
+          </fieldset>
+          <label>
+            t
+            <input id="i-t" type="range" min="0" max="1" step="0.005" value="0" />
+            <span id="i-t-read">0.00</span>
+          </label>
+          <div class="actions">
+            <button id="i-play" class="primary" type="button">Play</button>
+          </div>
+          <div class="presets">
+            <button type="button" data-ipreset="corner">Roll+pitch+yaw</button>
+            <button type="button" data-ipreset="yaw">Pure yaw 170°</button>
+            <button type="button" data-ipreset="over">Over the top</button>
+            <button type="button" data-ipreset="flip">Half flip</button>
+          </div>
+        </aside>
+
+        <div class="stage">
+          <div class="scope-row">
+            <article class="scope">
+              <header>
+                <h3>SLERP</h3>
+                <span class="badge" id="i-badge-s">one axis</span>
+              </header>
+              <canvas id="i-slerp" class="view3d" width="640" height="520"></canvas>
+              <p class="caption">Nose tip (red) and right arm tip (amber) traces. One fixed axis, constant rate.</p>
+            </article>
+            <article class="scope">
+              <header>
+                <h3>Euler lerp</h3>
+                <span class="badge muted" id="i-badge-e">three angles</span>
+              </header>
+              <canvas id="i-euler" class="view3d" width="640" height="520"></canvas>
+              <p class="caption">Same endpoints, each angle moved linearly. The path bends and the speed wanders.</p>
+            </article>
+          </div>
+          <article class="trace">
+            <header>
+              <h3>Angular speed along the path</h3>
+              <span class="badge muted">deg per unit t</span>
+            </header>
+            <canvas id="i-speed" width="1200" height="220"></canvas>
+            <p class="legend">
+              <span><i class="swatch thrust"></i> SLERP — flat: one turn at constant rate</span>
+              <span><i class="swatch net"></i> Euler lerp — speeds up and slows down on its own</span>
+            </p>
+          </article>
+        </div>
+
+        <aside class="meters">
+          <h2>Path length</h2>
+          <dl>
+            <div><dt>Shortest turn</dt><dd id="i-m-geo">—</dd></div>
+            <div><dt>SLERP turns</dt><dd id="i-m-s">—</dd></div>
+            <div><dt>Euler lerp turns</dt><dd id="i-m-e">—</dd></div>
+            <div><dt>Euler detour</dt><dd id="i-m-extra">—</dd></div>
+            <div><dt>Gap at t</dt><dd id="i-m-gap">—</dd></div>
+          </dl>
+          <blockquote id="i-lesson">Press play. Both drones leave A and reach B. Only one takes the short way.</blockquote>
+        </aside>
+      </section>
+
+      <!-- ============================== PRIMER ============================== -->
+      <section id="panel-primer" class="panel primer">
+        <article>
+          <h2>Why a drone needs four numbers</h2>
+          <p>
+            A quadrotor has one force it can steer: the sum of its rotor
+            thrusts, pointed down the body z axis. Gravity points down the
+            world z axis. Every manoeuvre is a choice of <strong>how hard</strong>
+            to push and <strong>which way the belly faces</strong>.
+          </p>
+          <ol>
+            <li>
+              <strong>Attitude is a rotation.</strong> It maps body vectors
+              (thrust, rotor positions) into the world. R · [0, 0, −T] is the
+              force that actually moves the drone.
+            </li>
+            <li>
+              <strong>Euler angles are a recipe.</strong> Yaw, then pitch,
+              then roll about moving axes. Readable, but the recipe has a
+              singularity: at pitch ±90° roll and yaw do the same thing.
+            </li>
+            <li>
+              <strong>Quaternions are a place.</strong> Four numbers on a
+              unit sphere, no singular attitude, composition is a product,
+              and the rate equation q̇ = ½ q ⊗ ω has no trig or division.
+            </li>
+            <li>
+              <strong>Rotation vectors are the bridge.</strong> Axis × angle
+              in three numbers. Body rates ω are rotation vectors per second,
+              and exp(ω dt / 2) is the quaternion step.
+            </li>
+          </ol>
+          <h3>The control loop in one breath</h3>
+          <p>
+            Want to go north? Need a north force. Thrust must lean north, so
+            command a nose-down pitch. The attitude error between where the
+            belly points and where it should point is a rotation vector; the
+            controller turns it into body torques; the mixer turns torques
+            into four rotor thrusts. Then increase the total so T cos tilt
+            still equals mg.
+          </p>
+        </article>
+        <article>
+          <h2>Equations on the bench</h2>
+          <pre class="eq">R = Rz(ψ) · Ry(θ) · Rx(φ)</pre>
+          <pre class="eq">q = [cos(α/2), sin(α/2) n̂]      v_w = q ⊗ v_b ⊗ q*</pre>
+          <pre class="eq">r = α n̂        q = exp(r / 2)</pre>
+          <pre class="eq">⎡φ̇⎤   ⎡1  sφ tθ   cφ tθ ⎤ ⎡p⎤
+⎢θ̇⎥ = ⎢0  cφ      −sφ   ⎥ ⎢q⎥
+⎣ψ̇⎦   ⎣0  sφ/cθ   cφ/cθ ⎦ ⎣r⎦</pre>
+          <pre class="eq">m a = R [0, 0, −ΣFᵢ] + [0, 0, mg]
+J ω̇ = Σ rᵢ × Fᵢ + τ_drag − ω × J ω</pre>
+          <h3>Conventions</h3>
+          <ul>
+            <li>World NED, body FRD, as in PX4 and most aerospace texts.</li>
+            <li>Hamilton quaternions, scalar first, body → world.</li>
+            <li>Positive roll drops the right arm, positive pitch lifts the nose, positive yaw turns right.</li>
+          </ul>
+          <h3>Honest limits</h3>
+          <ul>
+            <li>Rigid body. No drag on the frame, no ground effect, no motor lag.</li>
+            <li>Rotor thrust is clipped to 0–9 N; yaw torque is 0.016 m × thrust.</li>
+            <li>The force tab is a snapshot: it shows the accelerations, not the flight that follows.</li>
+          </ul>
+        </article>
+      </section>
+
+      <!-- ============================== GLOSSARY ============================== -->
+      <section id="panel-glossary" class="panel glossary" aria-label="Glossary">
+        <article id="term-frames">
+          <h2>World and body frames</h2>
+          <p>
+            World NED: x north, y east, z down, fixed to the ground. Body
+            FRD: x out the nose, y out the right arm, z out the belly, bolted
+            to the drone. Thrust is simple in the body ([0, 0, −T]); gravity
+            is simple in the world ([0, 0, mg]). The rotation R converts.
+          </p>
+        </article>
+        <article id="term-euler">
+          <h2>Euler angles</h2>
+          <p>
+            Three successive turns about named axes. Aerospace uses intrinsic
+            Z-Y-X: yaw ψ about z, then pitch θ about the <em>new</em> y, then
+            roll φ about the <em>newest</em> x. Change the order and the same
+            numbers point the drone somewhere else.
+          </p>
+          <pre class="eq">R = Rz(ψ) Ry(θ) Rx(φ)</pre>
+        </article>
+        <article id="term-gimbal">
+          <h2>Gimbal lock</h2>
+          <p>
+            At pitch ±90° the roll axis lines up with the yaw axis. Roll and
+            yaw now produce the same motion, and only φ − ψ (or φ + ψ) is
+            defined. The drone has not lost a degree of freedom — the angles
+            have. Near the lock, W(φ, θ) divides by cos θ and the Euler rates
+            needed for an ordinary body rate run off to infinity.
+          </p>
+        </article>
+        <article id="term-quaternion">
+          <h2>Quaternion</h2>
+          <p>
+            q = w + xi + yj + zk with |q| = 1. For a turn of α about unit axis
+            n̂, q = [cos(α/2), sin(α/2) n̂]. Composing turns is the Hamilton
+            product. q and −q are the same attitude (double cover), so a
+            360° turn gives −q and 720° gets back to q.
+          </p>
+          <pre class="eq">q̇ = ½ q ⊗ [0, ω]</pre>
+        </article>
+        <article id="term-rotvec">
+          <h2>Rotation vector</h2>
+          <p>
+            r = α n̂: direction is the axis, length is the angle. Every
+            attitude is one turn about some fixed axis (Euler's rotation
+            theorem); this is that turn in three numbers. Attitude errors in
+            controllers are usually rotation vectors.
+          </p>
+          <pre class="eq">q = [cos(|r|/2), sin(|r|/2) r/|r|]</pre>
+        </article>
+        <article id="term-matrix">
+          <h2>Rotation matrix</h2>
+          <p>
+            Nine numbers, orthonormal, det = +1. Column i is body axis i
+            written in world coordinates. Multiplying by R is the cheapest way
+            to rotate many vectors; nine numbers for three degrees of freedom
+            is the price.
+          </p>
+        </article>
+        <article id="term-omega">
+          <h2>Angular velocity ω</h2>
+          <p>
+            A vector whose direction is the instantaneous spin axis and whose
+            length is the rate. Gyros measure it in the body frame as
+            (p, q, r). It is <em>not</em> (φ̇, θ̇, ψ̇) — those are related by
+            W(φ, θ), which is singular at pitch ±90°.
+          </p>
+        </article>
+        <article id="term-thrust">
+          <h2>Thrust vector</h2>
+          <p>
+            Rotors only push along −z body. Tilt by θ and the vertical share
+            is T cos θ, the horizontal share T sin θ. Hold altitude while
+            tilted and T must rise to mg / cos θ — that is why a fast drone
+            runs out of throttle.
+          </p>
+        </article>
+        <article id="term-torque">
+          <h2>Torque and mixing</h2>
+          <p>
+            Roll torque: τx = Σ −yᵢ Fᵢ (left rotors up, roll right). Pitch:
+            τy = Σ xᵢ Fᵢ (front rotors up, nose up). Yaw comes from prop
+            drag: CCW props drag the frame clockwise. The mixer inverts that
+            4 × 4 map: from [T, τx, τy, τz] to four rotor thrusts.
+          </p>
+        </article>
+        <article id="term-slerp">
+          <h2>SLERP</h2>
+          <p>
+            Spherical linear interpolation between unit quaternions:
+            constant angular rate about one fixed axis, the shortest turn
+            between two attitudes. Pick the sign so q₀ · q₁ ≥ 0, or it goes
+            the long way round.
+          </p>
+          <pre class="eq">slerp = sin((1−t)Ω)/sin Ω · q₀ + sin(tΩ)/sin Ω · q₁</pre>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      <p>Chi3-labs · drone attitude · one thrust axis, four numbers to point it</p>
+    </footer>
+    <script src="static/app.js"></script>
+  </body>
+</html>
